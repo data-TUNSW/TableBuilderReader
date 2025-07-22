@@ -5,7 +5,8 @@ from functools import reduce
 import os
 
 
-pd.options.mode.chained_assignment = None  # default='warn'
+# pd.options.mode.chained_assignment = None  # default='warn'
+# Consider using pd.option_context('mode.chained_assignment', None) locally if needed.
 import numpy as np
 
 
@@ -97,6 +98,7 @@ class TableBuilderReader:
         df_percentage (pd.DataFrame): A dataframe containing percentage calculations.
         shapefile_df (gpd.GeoDataFrame): A GeoDataFrame for geographical data.
     """
+
     def __init__(
         self,
         file_name,
@@ -136,6 +138,10 @@ class TableBuilderReader:
         save_processed_file=True,
         overwrite_processed_file=False,
         processed_file_name=None,
+        poa_shapefile_path="G:/Shared drives/Data/ABS/Geography/"
+        + "2021 shapefiles/POA_2021_AUST_GDA2020.shp",
+        lga_shapefile_path="G:/Shared drives/Data/ABS/Geography/"
+        + "2021 shapefiles/LGA_2021_AUST_GDA2020.shp",
         **kwargs,
     ):
         self.full_file_name = file_name
@@ -191,7 +197,7 @@ class TableBuilderReader:
                         "processed_file_name must be provided if save_processed_file"
                         + " is True."
                     )
-                if not overwrite_processed_file and os.path.exists(
+                if not self.overwrite_processed_file and os.path.exists(
                     self.processed_file_name
                 ):
                     raise FileExistsError(
@@ -279,15 +285,13 @@ class TableBuilderReader:
 
     def load_shapefile(self):
         if "POA" in self.variables.keys():
-            self.shapefile_df = gpd.read_file(
-                "G:/Shared drives/Data/ABS/Geography/"
-                + "2021 shapefiles/POA_2021_AUST_GDA2020.shp"
-            ).rename(columns={"POA_CODE21": "POA"})
+            self.shapefile_df = gpd.read_file(self.poa_shapefile_path).rename(
+                columns={"POA_CODE21": "POA"}
+            )
         elif "LGA" in self.variables.keys():
-            self.shapefile_df = gpd.read_file(
-                "G:/Shared drives/Data/ABS/Geography/"
-                + "2021 shapefiles/LGA_2021_AUST_GDA2020.shp"
-            ).rename(columns={"LGA_CODE21": "LGA"})
+            self.shapefile_df = gpd.read_file(self.lga_shapefile_path).rename(
+                columns={"LGA_CODE21": "LGA"}
+            )
         else:
             raise ValueError(
                 f"No known geography types found in variables: {self.variables.keys()}"
@@ -432,8 +436,11 @@ class TableBuilderReader:
                 result[percentage_name] - result[percentage_name].min()
             ) / (result[percentage_name].max() - result[percentage_name].min())
         if standardised:
+            # Merge weights from the original dataframe based on the geography column
+            weights = self.df.groupby(geog)[self.count].sum().reset_index()
+            result = result.merge(weights, on=geog, suffixes=("", "_weights"))
             result["Standardised " + percentage_name] = weighted_standardised(
-                result[percentage_name], self.df[self.count]
+                result[percentage_name], result[self.count + "_weights"]
             )
         result = result.merge(geog_totals.reset_index(), on=geog, how="left")
         if self.percentage_percentile:

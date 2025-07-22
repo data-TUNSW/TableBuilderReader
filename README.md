@@ -2,6 +2,11 @@
 
 This module provides a flexible and robust interface for reading, cleaning, and processing ABS TableBuilder CSV outputs, with optional support for geospatial joins and advanced percentage calculations.
 
+## Installation
+
+Install locally with
+``pip install -e "G:\Shared drives\Data\Analysis\Table Builder Reader"
+
 ## Features
 
 - **Automatic Variable Detection:**  

@@ -56,7 +56,7 @@ def weighted_standardised(series, weights):
     return (series - mean) / std_dev if std_dev != 0 else series - mean
 
 
-class table_builder_reader:
+class TableBuilderReader:
     """A class to read and process ABS TableBuilder files.
     This class handles the reading of TableBuilder files, extracting variables,
     applying filters, and calculating percentages. It can also join shapefiles

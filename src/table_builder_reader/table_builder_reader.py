@@ -133,6 +133,7 @@ class TableBuilderReader:
         category_grouping=None,
         category_group_name=None,
         multivariable=False,
+        column_variable=None,
         add_filter=None,
         groupby_columns=None,
         save_processed_file=True,

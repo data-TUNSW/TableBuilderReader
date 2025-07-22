@@ -57,7 +57,46 @@ def weighted_standardised(series, weights):
 
 
 class table_builder_reader:
-
+    """A class to read and process ABS TableBuilder files.
+    This class handles the reading of TableBuilder files, extracting variables,
+    applying filters, and calculating percentages. It can also join shapefiles
+    for geographical data.
+    Attributes:
+        file_name (str): The name of the TableBuilder file.
+        total (bool): Whether to include total rows.
+        migratory (bool): Whether to include migratory data.
+        overseas (bool): Whether to include overseas visitor data.
+        infer_from_file_name (bool): Whether to infer variables from the file name.
+        shapefile (bool): Whether to join shapefiles.
+        geog_ff (bool): Whether to forward fill geographical data.
+        clean_poa (bool): Whether to clean POA data.
+        verify_file_name (dict): A dictionary to verify the file name.
+        expected_footer_strings (list): A list of expected footer strings.
+        percentage_categories (list): Categories for percentage calculations.
+        percentage_percentile (bool): Whether to calculate weighted percentiles.
+        percentage_name (str): The name for the percentage column.
+        min_max_normalisation (bool): Whether to apply min-max normalisation.
+        standardised (bool): Whether to standardise the percentage values.
+        category_grouping (dict): A dictionary for grouping categories.
+        category_group_name (str): The name for the category group.
+        multivariable (bool): Whether to handle multiple variables.
+        add_filter (dict): Additional filters to apply to the dataframe.
+        groupby_columns (list): Columns to group by in the dataframe.
+        save_processed_file (bool): Whether to save the processed dataframe to a file.
+        overwrite_processed_file (bool): Whether to overwrite the processed file.
+        processed_file_name (str): The name of the processed file to save.
+        variables (dict): A dictionary of variables extracted from the file.
+        filters (dict): A dictionary of filters applied to the dataframe.
+        count (str): The count type (e.g., Dwellings, Persons).
+        count_code (str): The code for the count type (e.g., TBD, TBP).
+        skipfooter (int): The number of footer rows to skip when reading the file.
+        footer_rows (list): A list of footer row indices.
+        variable_row (int): The row index where variables are defined in the file.
+        found_data (dict): A dictionary to verify if the file contains expected data.
+        df (pd.DataFrame): The main dataframe containing the processed data.
+        df_percentage (pd.DataFrame): A dataframe containing percentage calculations.
+        shapefile_df (gpd.GeoDataFrame): A GeoDataFrame for geographical data.
+    """
     def __init__(
         self,
         file_name,

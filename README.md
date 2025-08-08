@@ -5,7 +5,7 @@ This module provides a flexible and robust interface for reading, cleaning, and 
 ## Installation
 
 Install locally with
-``pip install -e "G:\Shared drives\Data\Analysis\Table Builder Reader"
+``pip install -e "G:\Shared drives\Data\Analysis\ABS Methods"
 
 ## Features
 

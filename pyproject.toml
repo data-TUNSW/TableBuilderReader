@@ -3,8 +3,8 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "table_builder_reader"
-version = "0.2.0"
+name = "abs_methods"
+version = "0.2.1"
 description = "A flexible and robust interface for reading, cleaning, and processing ABS TableBuilder CSV outputs, with optional geospatial support."
 authors = [
     { name="Jack Moon", email="jack.moon@tenantsunion.org.au" }

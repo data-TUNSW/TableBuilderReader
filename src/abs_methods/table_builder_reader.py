@@ -6,8 +6,19 @@ import os
 
 
 # pd.options.mode.chained_assignment = None  # default='warn'
+pd.options.mode.copy_on_write = True  # Removes SettingWithCopyWarning:
 # Consider using pd.option_context('mode.chained_assignment', None) locally if needed.
 import numpy as np
+
+# Normal print if kwarg debug is True else print nothing
+
+
+def debug_print(message, debug=False):
+    """
+    Prints the message if debug is True, otherwise does nothing.
+    """
+    if debug:
+        print(message)
 
 
 def is_list_of_lists(lst):
@@ -106,7 +117,7 @@ class TableBuilderReader:
         migratory=False,
         overseas=False,
         infer_from_file_name=True,
-        shapefile=True,
+        shapefile=False,
         geog_ff=True,
         clean_poa=True,
         verify_file_name={
@@ -136,7 +147,7 @@ class TableBuilderReader:
         column_variable=None,
         add_filter=None,
         groupby_columns=None,
-        save_processed_file=True,
+        save_processed_file=False,
         overwrite_processed_file=False,
         processed_file_name=None,
         poa_shapefile_path="G:/Shared drives/Data/ABS/Geography/"
@@ -155,9 +166,11 @@ class TableBuilderReader:
         self.count_code = ""  # TBD, TBP, TBP15 etc
         self.skipfooter = 0
         self.footer_rows = []
+        self.column_variable_row = None
         self.variable_row = None
         self.found_data = self.verify_file_name
         self.df = None
+        self.df_changes = None
         self.df_percentage = None
         self.shapefile = shapefile
         self.shapefile_df = None
@@ -167,31 +180,62 @@ class TableBuilderReader:
             self.set_variables()
             self.detect_variables_row()
             self.detect_footer_row()
-            self.df = pd.read_csv(
-                self.full_file_name,
-                skiprows=self.variable_row,
-                skipfooter=self.skipfooter,
-                names=list(self.variables.keys()) + [self.count],
-                header=0,
-                index_col=False,
-                engine="python",
-            )
+            if self.column_variable is None:
+                self.df = pd.read_csv(
+                    self.full_file_name,
+                    skiprows=self.variable_row,
+                    skipfooter=self.skipfooter,
+                    names=list(self.variables.keys()) + [self.count],
+                    header=0,
+                    index_col=False,
+                    engine="python",
+                )
+            else:
+                self.df = pd.read_csv(
+                    self.full_file_name,
+                    skiprows=self.column_variable_row,
+                    skipfooter=self.skipfooter,
+                    header=0,
+                    index_col=False,
+                    engine="python",
+                )
+                self.df.iloc[:, 0] = self.df.iloc[:, 0].ffill()
+                self.df = (
+                    self.df.set_index([self.df.columns[0], self.df.columns[1]])
+                    .stack(future_stack=True)
+                    .reset_index()
+                    .dropna()
+                )
+                self.df.columns = list(self.variables.keys()) + [self.count]
+            self.df_changes = {"Original": self.df.copy()}
             # Cleaning
             if self.geog_ff:
                 self.df.iloc[:, 0] = self.df.iloc[:, 0].ffill()
             if self.multivariable:
                 self.df.iloc[:, 1] = self.df.iloc[:, 1].ffill()
             if not self.total:
-                self.df = self.df[~(self.df.iloc[:, 0] == "Total")]
+                for j in range(len(self.df.columns) - 1):
+                    self.df = self.df[
+                        ~(self.df.iloc[:, j].astype(str).str.contains("Total"))
+                    ]
             if not self.migratory:
-                self.df = self.df[~(self.df.iloc[:, 0].str.contains("Migratory"))]
+                for j in range(len(self.df.columns) - 1):
+                    self.df = self.df[
+                        ~(self.df.iloc[:, j].astype(str).str.contains("Migratory"))
+                    ]
             if not self.overseas:
-                self.df = self.df[
-                    ~(self.df.iloc[:, 1].astype(str).str.contains("Overseas visitor"))
-                ]
+                for j in range(len(self.df.columns) - 1):
+                    self.df = self.df[
+                        ~(
+                            self.df.iloc[:, j]
+                            .astype(str)
+                            .str.contains("Overseas visitor")
+                        )
+                    ]
             if self.clean_poa:
                 if "POA" in self.variables.keys():
                     self.df["POA"] = self.df["POA"].str.extract(r"(\d{4})")
+            self.df_changes["Clean"] = self.df.copy()
             if self.save_processed_file:
                 if self.processed_file_name is None:
                     raise ValueError(
@@ -202,62 +246,23 @@ class TableBuilderReader:
                     self.processed_file_name
                 ):
                     raise FileExistsError(
-                        f"Processed file {self.processed_file_name} already exists. Set"
-                        + " overwrite_processed_file=True to overwrite."
+                        f"Processed file {self.processed_file_name} already exists.\n"
+                        + "Set overwrite_processed_file=True to overwrite."
                     )
                 self.df.to_csv(self.processed_file_name, index=False)
             if self.add_filter is not None:
-                for column, filter_condition in self.add_filter.items():
-                    if column in self.df.columns:
-                        try:
-                            self.df = pd.eval(
-                                f"self.df[self.df['{column}'] {filter_condition}]"
-                            )
-                        except Exception as e:
-                            raise ValueError(
-                                f"Error applying filter {filter_condition} on column"
-                                + f" {column}: {e}\nEvaluated expression: "
-                                + f"self.df[self.df[{column}] {filter_condition}]"
-                            )
+                self.apply_filters(add_filters=self.add_filter)
+                self.df_changes["Filtered"] = self.df.copy()
             if self.groupby_columns is not None:
-                if np.array(
-                    [col in self.df.columns for col in self.groupby_columns]
-                ).all():
-                    self.df = (
-                        self.df.groupby(self.groupby_columns)[self.count]
-                        .sum()
-                        .reset_index()
-                    )
-                    self.variables = {
-                        key: value
-                        for key, value in self.variables.items()
-                        if key in self.df.columns
-                    }
-                else:
-                    raise ValueError(
-                        f"Group by column {self.groupby_columns} not found in dataframe"
-                        + f" columns: {self.df.columns}"
-                    )
+                self.apply_groupby_columns(groupby_columns=self.groupby_columns)
+                self.df_changes["Grouped"] = self.df.copy()
             # Calculating the percentage of each category in the dataframe
             if self.category_grouping is not None:
-                var = list(self.variables)[-1]
-                if self.category_group_name is None:
-                    category_group_name = var
-                geog = list(self.variables.keys())[0]
-                self.df[category_group_name] = self.df.apply(
-                    lambda x: [
-                        k for k, v in self.category_grouping.items() if x[var] in v
-                    ][0],
-                    axis=1,
-                )
-                self.df = (
-                    self.df.groupby([geog, category_group_name])[self.count]
-                    .sum()
-                    .reset_index()
-                )
+                self.apply_category_grouping()
+                self.df_changes["Category Grouped"] = self.df.copy()
             if self.percentage_categories is not None:
                 self.df_percentage = self.percentage_in_categories(
-                    categories=percentage_categories,
+                    categories=self.percentage_categories,
                     percentage_name=self.percentage_name,
                     min_max_normalisation=self.min_max_normalisation,
                     standardised=self.standardised,
@@ -268,6 +273,85 @@ class TableBuilderReader:
                     )
             if self.shapefile:
                 self.join_shapefile()
+
+    def apply_filters(self, add_filters=None):
+        """
+        Applies additional filters to the dataframe.
+        """
+        if add_filters is None:
+            add_filters = self.add_filter
+        elif add_filters is not None:
+            for column, filter_condition in add_filters.items():
+                if column in self.df.columns:
+                    try:
+                        self.df = pd.eval(
+                            f"self.df[self.df['{column}']{filter_condition}]"
+                        )
+                    except Exception as e:
+                        try:  # Convert column to numeric if filter fails
+                            self.df[column] = pd.to_numeric(
+                                self.df[column], errors="coerce"
+                            )
+                            self.df = pd.eval(
+                                f"self.df[self.df['{column}']{filter_condition}]"
+                            )
+                        except Exception as e:
+                            raise ValueError(
+                                "Error applying filter "
+                                + f"{filter_condition} on column {column}: {e}\n"
+                                + "Evaluated expression: "
+                                + f"self.df[self.df[{column}]{filter_condition}]"
+                            )
+        else:
+            raise ValueError("No filters provided to apply_filters method.")
+
+    def apply_groupby_columns(self, groupby_columns=None):
+        """
+        Applies groupby operation on the dataframe based on specified columns.
+        """
+        if groupby_columns is None:
+            groupby_columns = self.groupby_columns
+        elif groupby_columns is not None:
+            if np.array([col in self.df.columns for col in self.groupby_columns]).all():
+                self.df = (
+                    self.df.groupby(self.groupby_columns)[self.count]
+                    .sum()
+                    .reset_index()
+                )
+                self.variables = {
+                    key: value
+                    for key, value in self.variables.items()
+                    if key in self.df.columns
+                }
+            else:
+                raise ValueError(
+                    f"Group by column {self.groupby_columns} not found in dataframe"
+                    + f" columns: {self.df.columns}"
+                )
+
+    def apply_category_grouping(self):
+        """
+        Applies category grouping to the dataframe based on the
+        category_grouping dictionary.
+        """
+        if self.category_grouping is not None:
+            var = list(self.variables)[-1]
+            if self.category_group_name is None:
+                category_group_name = var
+            else:
+                category_group_name = self.category_group_name
+            geog = list(self.variables.keys())[0]
+            self.df[category_group_name] = self.df.apply(
+                lambda x: [k for k, v in self.category_grouping.items() if x[var] in v][
+                    0
+                ],
+                axis=1,
+            )
+            self.df = (
+                self.df.groupby([geog, category_group_name])[self.count]
+                .sum()
+                .reset_index()
+            )
 
     def set_count(self):
         if "TBD" in self.file_name:
@@ -348,20 +432,42 @@ class TableBuilderReader:
                 self.file_name.split("-")[1].split(".csv")[0]
             )
 
-    def detect_variables_row(self):
+    def detect_variables_row(self, limit_rows=100):
+        truth_list = {
+            var: False for var in self.variables.keys() if var != self.column_variable
+        }
         with open(self.full_file_name) as f:
             for i, row in enumerate(csv.reader(f)):
-                if len(row) > len(self.variables.keys()):
+                if i >= limit_rows:
+                    break
+                # Check if the row is long enough to contain all variables
+                if (len(row) > len(truth_list.values())) and i < limit_rows:
                     row = [cell for cell in row if cell != ""]
-                    truth_list = [False for _ in self.variables.keys()]
+                    # Loop through all cells in row
                     for j in range(len(row)):
-                        if list(self.variables.keys())[j] in row[j]:
-                            truth_list[j] = True
-                        if all(truth_list):
+                        if (
+                            self.column_variable_row is None
+                            and self.column_variable is not None
+                            and self.column_variable in row[j]
+                        ):
+                            self.column_variable_row = i
+                        # Check if the variables are in the row
+                        for var in truth_list.keys():
+                            if var in row[j]:
+                                truth_list[var] = True
+                        # If all variables are found in the row, set the variable_row
+                        if all(truth_list.values()):
                             self.variable_row = i
                             return
         if self.variable_row is None:
-            raise ValueError("No variable row found. Please check the file.")
+            raise ValueError(
+                "No variable row found. Please check the file.\n"
+                + f"Truth list {truth_list}\n"
+                + f"Variables: {self.variables.keys()}\n"
+                + f"Column variable: {self.column_variable}\n"
+                + f"Column variable row: {self.column_variable_row}\n"
+                + f"File name: {self.file_name}"
+            )
 
     def detect_footer_row(self):
         if self.variable_row is None:
@@ -389,6 +495,7 @@ class TableBuilderReader:
         percentage_name=None,
         min_max_normalisation=True,
         standardised=True,
+        debug=False,
     ):
         """
         Returns the percentage of each category in the dataframe.
@@ -398,10 +505,14 @@ class TableBuilderReader:
         if variable is None:
             # If no variable is provided, use the last variable in the list
             variable = list(self.variables.keys())[-1]
+            debug_print(f"No variable found, Using variable: {variable}", debug=debug)
         if geog is None:
             # If no geog is provided, use the first variable in the list
             geog = list(self.variables.keys())[0]
+            debug_print(f"No geography found, Using geography: {geog}", debug=debug)
         if is_list_of_lists(categories):
+            # If categories is a list of lists, calculate percentage for each sublist
+            debug_print(f"Categories are a list of lists: {categories}", debug=debug)
             results = [
                 self.percentage_in_categories(
                     categories=cat,
@@ -409,22 +520,44 @@ class TableBuilderReader:
                     geog=geog,
                     percentage_name=None,
                     min_max_normalisation=min_max_normalisation,
+                    standardised=standardised,
                 )
                 for cat in categories
             ]
             return reduce(lambda df1, df2: pd.merge(df1, df2), results)
         if percentage_name is None:
+            # No percentage name is provided, default name based on categories
+            debug_print(
+                (
+                    "No percentage name provided,"
+                    f"using default based on categories: {categories}"
+                ),
+                debug=debug,
+            )
             if isinstance(categories, str):
                 percentage_name = f"{categories} Percentage"
+                debug_print(f"Using percentage name: {percentage_name}", debug=debug)
             elif isinstance(categories, list):
+                debug_print(f"Using categories: {categories}", debug=debug)
                 if len(categories) == 1:
                     percentage_name = f"{categories[0]} Percentage"
+                    debug_print(
+                        f"Using single category percentage name: {percentage_name}",
+                        debug=debug,
+                    )
                 elif len(categories) > 1:
                     percentage_name = f"{', '.join(categories)} Percentage"
+                    debug_print(
+                        f"Using multiple categories percentage name: {percentage_name}",
+                        debug=debug,
+                    )
             else:
                 raise ValueError("categories must be a string or a list of strings.")
         if isinstance(categories, str):
             categories = [categories]
+            debug_print(
+                f"Categories is a string, converted to list: {categories}", debug=debug
+            )
         geog_totals = self.df.groupby(geog)[self.count].sum()
         geog_categories = (
             self.df[self.df[variable].isin(categories)].groupby(geog)[self.count].sum()
@@ -436,13 +569,25 @@ class TableBuilderReader:
             result["Normalised " + percentage_name] = (
                 result[percentage_name] - result[percentage_name].min()
             ) / (result[percentage_name].max() - result[percentage_name].min())
+            debug_print(
+                f"Min-max normalisation applied to {percentage_name}", debug=debug
+            )
         if standardised:
             # Merge weights from the original dataframe based on the geography column
-            weights = self.df.groupby(geog)[self.count].sum().reset_index()
+            weights = (
+                self.df.groupby(geog)[self.count]
+                .sum()
+                .reset_index()
+                .rename(columns={self.count: self.count + "_weights"})
+            )
+            debug_print(weights, debug=debug)
+            debug_print(result, debug=debug)
             result = result.merge(weights, on=geog, suffixes=("", "_weights"))
+            debug_print(result, debug=debug)
             result["Standardised " + percentage_name] = weighted_standardised(
                 result[percentage_name], result[self.count + "_weights"]
             )
+            result = result.drop(columns=[self.count + "_weights"])
         result = result.merge(geog_totals.reset_index(), on=geog, how="left")
         if self.percentage_percentile:
             result = self.weighted_percentile(
@@ -505,3 +650,6 @@ class TableBuilderReader:
             ] = row["percentile"]
         data[f"{variable} Percentile"] = data[f"{variable} Percentile"].round(10)
         return pd.concat([data, missing_data], axis=0).sort_index()
+
+    def __repr__(self):
+        return str(self.__dict__)

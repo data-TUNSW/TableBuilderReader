@@ -3,12 +3,12 @@ import pandas as pd
 import geopandas as gpd
 from functools import reduce
 import os
-
+import numpy as np
 
 # pd.options.mode.chained_assignment = None  # default='warn'
 pd.options.mode.copy_on_write = True  # Removes SettingWithCopyWarning:
 # Consider using pd.option_context('mode.chained_assignment', None) locally if needed.
-import numpy as np
+
 
 # Normal print if kwarg debug is True else print nothing
 
@@ -100,7 +100,7 @@ class TableBuilderReader:
         variables (dict): A dictionary of variables extracted from the file.
         filters (dict): A dictionary of filters applied to the dataframe.
         count (str): The count type (e.g., Dwellings, Persons).
-        count_code (str): The code for the count type (e.g., TBD, TBP).
+        count_code (str): The code for the count type (e.g., TBD, TBP, TBP15 etc).
         skipfooter (int): The number of footer rows to skip when reading the file.
         footer_rows (list): A list of footer row indices.
         variable_row (int): The row index where variables are defined in the file.
@@ -117,6 +117,7 @@ class TableBuilderReader:
         migratory=False,
         overseas=False,
         infer_from_file_name=True,
+        filters_as_columns=False,
         shapefile=False,
         geog_ff=True,
         clean_poa=True,
@@ -150,18 +151,16 @@ class TableBuilderReader:
         save_processed_file=False,
         overwrite_processed_file=False,
         processed_file_name=None,
-        poa_shapefile_path="G:/Shared drives/Data/ABS/Geography/"
-        + "2021 shapefiles/POA_2021_AUST_GDA2020.shp",
-        lga_shapefile_path="G:/Shared drives/Data/ABS/Geography/"
-        + "2021 shapefiles/LGA_2021_AUST_GDA2020.shp",
+        poa_shapefile_path=None,
+        lga_shapefile_path=None,
         **kwargs,
     ):
         self.full_file_name = file_name
         self.file_name = file_name.split("/")[-1]
+        self.filters = {}  # {"TEND": "Rented"}
         self.__dict__.update(locals())
         self.__dict__.update(kwargs)
         self.variables = {}  # {"LGA": ["Albury", "Adelaide", ...], "HIED": []}
-        self.filters = {}  # {"TEND": "Rented"}
         self.count = ""  # Dwellings, Persons etc
         self.count_code = ""  # TBD, TBP, TBP15 etc
         self.skipfooter = 0
@@ -199,9 +198,23 @@ class TableBuilderReader:
                     index_col=False,
                     engine="python",
                 )
-                self.df.iloc[:, 0] = self.df.iloc[:, 0].ffill()
+                for j in range(self.df.shape[1]):  # Forward fill if >50% missing
+                    if self.df.iloc[:, j].isna().sum() / len(self.df.iloc[:, j]) > 0.5:
+                        self.df.iloc[:, j] = self.df.iloc[:, j].ffill()
+                index_dummy = [
+                    self.df.columns[j]
+                    for j in range(
+                        len(
+                            [
+                                key
+                                for key in self.variables
+                                if key != self.column_variable and key != self.count
+                            ]
+                        )
+                    )
+                ]
                 self.df = (
-                    self.df.set_index([self.df.columns[0], self.df.columns[1]])
+                    self.df.set_index(index_dummy)
                     .stack(future_stack=True)
                     .reset_index()
                     .dropna()
@@ -236,6 +249,10 @@ class TableBuilderReader:
                 if "POA" in self.variables.keys():
                     self.df["POA"] = self.df["POA"].str.extract(r"(\d{4})")
             self.df_changes["Clean"] = self.df.copy()
+            self.set_variables()  # Update variables after cleaning
+            if self.filters_as_columns:
+                for filter_var, filter_value in self.filters.items():
+                    self.df[filter_var] = filter_value
             if self.save_processed_file:
                 if self.processed_file_name is None:
                     raise ValueError(
@@ -287,7 +304,7 @@ class TableBuilderReader:
                         self.df = pd.eval(
                             f"self.df[self.df['{column}']{filter_condition}]"
                         )
-                    except Exception as e:
+                    except Exception:
                         try:  # Convert column to numeric if filter fails
                             self.df[column] = pd.to_numeric(
                                 self.df[column], errors="coerce"
@@ -318,6 +335,7 @@ class TableBuilderReader:
                     .sum()
                     .reset_index()
                 )
+                # Update variables to match new structure
                 self.variables = {
                     key: value
                     for key, value in self.variables.items()
@@ -352,6 +370,7 @@ class TableBuilderReader:
                 .sum()
                 .reset_index()
             )
+            # Optionally update self.variables for the new group
 
     def set_count(self):
         if "TBD" in self.file_name:
@@ -407,19 +426,48 @@ class TableBuilderReader:
             )
 
     def set_variables(self):
+        """Sets the variables attribute based on the file name and filters."""
         if self.count == "":
             self.set_count()
-        variables = self.file_name.split(self.count_code + "_")[-1].split("_")
+        # Split after count_code, then split by "_"
+        variables = (
+            self.file_name.replace(".csv", "")
+            .split(self.count_code + "_")[-1]
+            .split("_")
+        )
+        variable_names = []
+        variable_descriptions = []
+        for var in variables:
+            if "(" in var and ")" in var:
+                # Extract base name and bracket content
+                base = var.split("(")[0]
+                start_bracket = var.find("(") + 1
+                end_bracket = var.find(")")
+                bracket = var[start_bracket:end_bracket]
+                variable_names.append(base)
+                variable_descriptions.append(f"{base} {bracket}")
+            else:
+                variable_names.append(var)
+                variable_descriptions.append(var)
+        # Remove filtered variables from the list of variables
         if len(self.filters) > 0:
             for filter in self.filters.keys():
-                for variable in variables:
+                for i, variable in enumerate(variable_names):
                     if filter in variable:
-                        variables.remove(variable)
-        self.variables = {variable: [] for variable in variables}
+                        variable_names.pop(i)
+                        variable_descriptions.pop(i)
+                        break
+        # Restructure: each variable is a dict with "data" and "description"
+        self.variables = {
+            variable_names[i]: {"data": [], "description": variable_descriptions[i]}
+            for i in range(len(variable_names))
+        }
         if self.df is not None:
             for variable in self.variables.keys():
                 if variable in self.df.columns:
-                    self.variables[variable] = self.df[variable].unique().tolist()
+                    self.variables[variable]["data"] = (
+                        self.df[variable].unique().tolist()
+                    )
                 else:
                     raise ValueError(
                         f"Variable {variable} not found in dataframe columns:"
@@ -427,10 +475,16 @@ class TableBuilderReader:
                     )
 
     def filtered_variables(self):
-        if "-" in self.file_name:
-            self.filters[self.file_name.split("-")[0].split("_")[-1]] = (
-                self.file_name.split("-")[1].split(".csv")[0]
-            )
+        if len(self.filters) == 0:
+            if "-" in self.file_name:
+                self.filters = {
+                    var[0]: var[1].replace(".csv", "")
+                    for var in [
+                        key.split("-")
+                        for key in self.file_name.split("_")
+                        if "-" in key
+                    ]
+                }
 
     def detect_variables_row(self, limit_rows=100):
         truth_list = {
@@ -510,6 +564,8 @@ class TableBuilderReader:
             # If no geog is provided, use the first variable in the list
             geog = list(self.variables.keys())[0]
             debug_print(f"No geography found, Using geography: {geog}", debug=debug)
+        # When accessing unique values, use self.variables[variable]["data"]
+        # When accessing description, use self.variables[variable]["description"]
         if is_list_of_lists(categories):
             # If categories is a list of lists, calculate percentage for each sublist
             debug_print(f"Categories are a list of lists: {categories}", debug=debug)

@@ -4,8 +4,21 @@ This module provides a flexible and robust interface for reading, cleaning, and 
 
 ## Installation
 
-Install locally with
-``pip install -e "G:\Shared drives\Data\Analysis\ABS Methods"
+Add as a git submodule in your project:
+```
+git submodule add https://github.com/data-TUNSW/TableBuilderReader lib/abs_methods
+```
+
+Then add the module to your Python path:
+```python
+import sys
+sys.path.insert(0, "lib/abs_methods/src")
+```
+
+Or clone directly:
+```
+git clone https://github.com/data-TUNSW/TableBuilderReader
+```
 
 ## Features
 
@@ -27,9 +40,9 @@ Install locally with
 ## Usage
 
 ```python
-from table_builder_reader import table_builder_reader
+from abs_methods.table_builder_reader import TableBuilderReader
 
-reader = table_builder_reader(
+reader = TableBuilderReader(
     file_name="path/to/your_tablebuilder_file.csv",
     processed_file_name="path/to/processed_file.csv",
     save_processed_file=True,
@@ -53,6 +66,8 @@ df_percentage = reader.df_percentage
 - `processed_file_name`: Path to save the processed CSV.
 - `save_processed_file`: Whether to save the processed file.
 - `shapefile`: Whether to join ABS shapefiles for POA/LGA.
+- `poa_shapefile_path`: Path to the ABS POA shapefile (required if `shapefile=True` and data includes POA).
+- `lga_shapefile_path`: Path to the ABS LGA shapefile (required if `shapefile=True` and data includes LGA).
 - `percentage_categories`: List of categories to calculate percentages for.
 - `category_grouping`: Dictionary for grouping categories.
 - `groupby_columns`: Columns to group by and aggregate.

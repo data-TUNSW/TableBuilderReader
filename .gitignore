@@ -1,3 +1,4 @@
-src/abs_methods/__pycache__
-src/abs_methods/__pycache__/*
-src/abs_methods/__pycache__/*.pyc
+**/__pycache__/
+**/*.pyc
+*.ipynb
+dist/

@@ -34,8 +34,14 @@ def fake_extracts(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_chunks_are_concatenated_before_totals_are_computed(fake_extracts):
-    """The spec's chunking rule: per-chunk totals would give 0800 two 1.0s."""
+def test_read_universe_concatenates_every_chunk(fake_extracts):
+    """read_universe reads and concatenates all chunks into one frame.
+
+    This does not by itself pin the concatenate-before-weighting rule - no
+    totals are computed here. That invariant is pinned end to end by
+    test_build_pair_weights_cross_border_postcode_correctly below, which
+    calls build_pair and checks the resulting fractions.
+    """
     df = bw.read_universe(
         sorted(fake_extracts.glob("chunk-*.csv")),
         count_type="Dwellings",
@@ -93,6 +99,87 @@ def test_built_file_passes_its_own_qa(fake_extracts, tmp_path):
 
     by_postcode = df.groupby("Postcode")["Postcode Fraction Rented Households"].sum()
     assert by_postcode.tolist() == pytest.approx([1.0, 1.0])
+
+
+def test_build_pair_weights_cross_border_postcode_correctly(fake_extracts, tmp_path):
+    """Pins the concatenate-then-weight rule end to end via build_pair.
+
+    Postcode 0800 has 30 dwellings in chunk-a (Darwin) and 10 in chunk-b
+    (Larrakeyah). Weighted after concatenation, its national total is 40, so
+    the two rows' Postcode Fraction values are 0.75 and 0.25 and sum to
+    exactly 1.0. Weighted per chunk instead, each row would see only its own
+    chunk's total (30 and 10), giving a fraction of 1.0 in each row and a sum
+    of 2.0 - which is what test_chunks_are_concatenated_before_totals_are_
+    computed (renamed above) could not have caught, since it never calls
+    build_pair or looks at a fraction.
+    """
+    pair = reg.GeographyPair(
+        key="POA_SAL",
+        geog1="POA",
+        geog1_name="Postcode",
+        geog2="SAL",
+        geog2_name="Suburb",
+        sources={"rented_households": "chunk-*.csv"},
+    )
+    df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
+
+    postcode_rows = df[df["Postcode"] == "0800"]
+    fractions = sorted(postcode_rows["Postcode Fraction Rented Households"].tolist())
+    assert fractions == pytest.approx([0.25, 0.75])
+    assert (
+        postcode_rows["Postcode Fraction Rented Households"].sum()
+        == pytest.approx(1.0)
+    )
+
+
+def test_build_pair_warns_when_a_configured_shapefile_is_missing(
+    fake_extracts, tmp_path, capsys
+):
+    """A configured-but-missing shapefile path prints a warning and the pair
+    still builds, per the ruling that a None shapefile stays silent but a
+    misconfigured one must not.
+    """
+    missing_shapefile = tmp_path / "does_not_exist.shp"
+    pair = reg.GeographyPair(
+        key="POA_SAL",
+        geog1="POA",
+        geog1_name="Postcode",
+        geog2="SAL",
+        geog2_name="Suburb",
+        sources={"rented_households": "chunk-*.csv"},
+        geog1_shapefile=missing_shapefile,
+        geog1_shapefile_name="POA_NAME21",
+    )
+
+    df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
+
+    captured = capsys.readouterr()
+    assert "POA_SAL" in captured.out
+    assert "Postcode" in captured.out
+    assert str(missing_shapefile) in captured.out
+    assert df is not None
+    assert len(df) > 0
+
+
+def test_build_pair_is_silent_when_no_shapefile_is_configured(
+    fake_extracts, tmp_path, capsys
+):
+    """The complementary case: geog1_shapefile=None is a deliberate "this
+    pair has none" and must not print anything about a missing shapefile.
+    """
+    pair = reg.GeographyPair(
+        key="POA_SAL",
+        geog1="POA",
+        geog1_name="Postcode",
+        geog2="SAL",
+        geog2_name="Suburb",
+        sources={"rented_households": "chunk-*.csv"},
+    )
+
+    bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
+
+    captured = capsys.readouterr()
+    assert "shapefile" not in captured.out.lower()
 
 
 def test_readme_lists_each_built_file_and_its_universes():

@@ -82,6 +82,44 @@ def test_geography_with_a_zero_total_is_exempt_from_the_sum_check():
     assert gw.check_weightings(df, GEOG1, GEOG2, [RENTED]) is None
 
 
+def test_nan_fraction_for_a_live_total_raises():
+    """A NaN fraction where the geography's own total is above zero is always
+    wrong, even when skipna lets the rest of the group still sum to 1 - which
+    is exactly the gap a plain groupby-sum check would miss."""
+    df = clean_frame()
+    extra = pd.DataFrame(
+        {
+            GEOG1: ["2000"],
+            GEOG2: ["Waverley"],
+            "Rented Households": [0],
+            f"{GEOG1} Total Rented Households": [40],
+            f"{GEOG2} Total Rented Households": [0],
+            f"{GEOG1} Fraction Rented Households": [np.nan],
+            f"{GEOG2} Fraction Rented Households": [np.nan],
+        }
+    )
+    df = pd.concat([df, extra], ignore_index=True)
+
+    # The other checks must stay silent so this test proves the new check,
+    # not one of the existing ones.
+    assert not df.duplicated(subset=[GEOG1, GEOG2]).any()
+    assert (df["Rented Households"] >= 0).all()
+    assert (
+        df["Rented Households"] <= df[f"{GEOG1} Total Rented Households"]
+    ).all()
+    assert (
+        df["Rented Households"] <= df[f"{GEOG2} Total Rented Households"]
+    ).all()
+    # 2000's GEOG1 fractions still sum to 1 once the NaN is skipna-dropped:
+    # 0.75 + 0.25. Waverley's own total is 0, so it is exempt from the
+    # GEOG2 sum check.
+    postcode_2000 = df[df[GEOG1] == "2000"][f"{GEOG1} Fraction Rented Households"]
+    assert np.isclose(postcode_2000.sum(skipna=True), 1.0)
+
+    with pytest.raises(ValueError, match="NaN fraction"):
+        gw.check_weightings(df, GEOG1, GEOG2, [RENTED])
+
+
 def test_every_problem_is_reported_not_just_the_first():
     df = clean_frame()
     df.loc[0, "Rented Households"] = -1

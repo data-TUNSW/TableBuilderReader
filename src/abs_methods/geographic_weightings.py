@@ -380,6 +380,17 @@ def check_weightings(
             if ((fraction < 0) | (fraction > 1)).any():
                 problems.append(f"{fraction_column}: outside [0, 1]")
 
+            # A NaN fraction is only valid where the geography's own total is
+            # zero. skipna in the sum-to-1 check below would otherwise let a
+            # stray NaN in a live geography pass unnoticed, so check for it
+            # directly instead of relying on that summation as a side effect.
+            nan_in_live = fraction.isna() & (df[total_column] > 0)
+            if nan_in_live.any():
+                problems.append(
+                    f"{fraction_column}: {int(nan_in_live.sum())} NaN "
+                    f"fractions where {total_column} is above zero"
+                )
+
             # Only geographies that exist in this universe should sum to 1.
             # A geography with a zero total has NaN fractions by design.
             live = df.groupby(geog_name)[total_column].max() > 0

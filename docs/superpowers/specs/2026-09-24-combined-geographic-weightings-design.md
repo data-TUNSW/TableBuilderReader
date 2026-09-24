@@ -208,7 +208,8 @@ sides to the same state would drop those pairs entirely.
 
 Per state, following the existing extract naming convention, with the state
 attached to `SAL` as a filter value so that one glob selects exactly one
-universe's chunks:
+universe's chunks - for five of the six universes; All Persons is the
+exception, and why is covered below:
 
 | Universe | Filename pattern |
 |---|---|
@@ -224,8 +225,15 @@ Nine chunks per universe, 54 extracts for the full grid. Suburb counts per state
 are NSW 4,543, Vic 2,945, Qld 3,234, SA 1,697, WA 1,700, Tas 777, NT 304,
 ACT 137, Other Territories 6; the largest chunk is 12.0M cells, 30% of the limit.
 
-The registry stores a glob per universe rather than nine literal paths, so adding
-or re-pulling a state needs no code change.
+The registry stores a glob per universe for five of the six universes, so
+adding or re-pulling a state for those needs no code change. All Persons is
+deliberately exempt: its filename (`2021_TBP_POA_SAL-{STE}.csv`) has nothing
+after the state code to disambiguate it from the other person-basis
+universes' per-tenure chunks, so a `{STE}-*` glob would also match
+`2021_TBP_POA_SAL-NSW_TEND-Rented.csv` and the `TENLLD-...` chunk, silently
+inflating All Persons' totals without tripping the fractions-sum-to-1 check.
+`_poa_sources` instead builds its source list explicitly from `CHUNK_STATES`,
+so a new or renamed state needs a one-line edit there.
 
 ## Generator
 

@@ -239,3 +239,105 @@ def attach_shapefile_attributes(
         attributes, left_on=key, right_on=name_column, how="left"
     )
     return merged.drop(columns=[key, name_column])
+
+
+def _universe_block(
+    frame: pd.DataFrame, universe: Universe, geog1_name: str, geog2_name: str
+) -> pd.DataFrame:
+    """Select one universe's columns and suffix its fractions.
+
+    `calculate_geog_weighting` emits bare "<geog> Fraction" names, which are the
+    only names that collide between universes.
+    """
+    count = universe.count_name
+    block = frame[
+        [
+            geog1_name,
+            geog2_name,
+            count,
+            f"{geog1_name} Total {count}",
+            f"{geog2_name} Total {count}",
+            f"{geog1_name} Fraction",
+            f"{geog2_name} Fraction",
+        ]
+    ].copy()
+    return block.rename(
+        columns={
+            f"{geog1_name} Fraction": f"{geog1_name} Fraction {count}",
+            f"{geog2_name} Fraction": f"{geog2_name} Fraction {count}",
+        }
+    )
+
+
+def _apply_fill_rules(
+    combined: pd.DataFrame,
+    frame: pd.DataFrame,
+    universe: Universe,
+    geog1_name: str,
+    geog2_name: str,
+) -> pd.DataFrame:
+    """Fill one universe's block for pairs the outer join left empty.
+
+    Count fills to 0: the pair genuinely contributes nothing. Totals fill from
+    the universe's own totals, so a pair missing from this universe still
+    carries its geographies' real denominators. Fractions fill to 0 where the
+    denominator is above zero, and stay NaN where it is zero, which is the
+    difference between "contributes 0% of the LGA's renters" and "has no
+    renters to contribute".
+    """
+    count = universe.count_name
+    combined[count] = combined[count].fillna(0)
+
+    for geog_name in (geog1_name, geog2_name):
+        total_column = f"{geog_name} Total {count}"
+        fraction_column = f"{geog_name} Fraction {count}"
+
+        totals = frame.drop_duplicates(geog_name).set_index(geog_name)[
+            total_column
+        ]
+        combined[total_column] = (
+            combined[total_column]
+            .fillna(combined[geog_name].map(totals))
+            .fillna(0)
+        )
+        combined[fraction_column] = (
+            combined[fraction_column]
+            .fillna(0)
+            .where(combined[total_column] > 0, other=np.nan)
+        )
+
+    return combined
+
+
+def combine_universes(
+    frames: dict[str, pd.DataFrame], geog1_name: str, geog2_name: str
+) -> pd.DataFrame:
+    """Outer-join every available universe onto one geography-pair frame.
+
+    `frames` maps a universe key to the frame `calculate_geog_weighting`
+    produced for it. Universes absent from `frames` contribute no columns.
+    """
+    present = [u for u in UNIVERSES if u.key in frames]
+    if not present:
+        raise ValueError("combine_universes needs at least one universe")
+
+    combined = None
+    for universe in present:
+        block = _universe_block(
+            frames[universe.key], universe, geog1_name, geog2_name
+        )
+        combined = (
+            block
+            if combined is None
+            else combined.merge(block, on=[geog1_name, geog2_name], how="outer")
+        )
+
+    for universe in present:
+        combined = _apply_fill_rules(
+            combined, frames[universe.key], universe, geog1_name, geog2_name
+        )
+
+    ordered = [geog1_name, geog2_name]
+    for universe in present:
+        ordered.extend(universe_columns(universe, geog1_name, geog2_name))
+    return combined[ordered]

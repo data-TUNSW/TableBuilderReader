@@ -64,6 +64,32 @@ def test_blocks_appear_in_universe_order(mismatched_universes):
     ]
 
 
+def test_block_order_ignores_the_frames_dict_insertion_order():
+    """UNIVERSES order is a guarantee of the output, not an accident of dict order.
+
+    Insert rented_households before all_households, which contradicts UNIVERSES
+    order. If combine_universes ever regressed to iterating frames.keys()
+    instead of UNIVERSES, the Rented Households block would come first here.
+    """
+    frames = {
+        "rented_households": weighting(
+            [("2000", "Sydney", 6), ("2000", "Inner West", 4)],
+            "Rented Households",
+        ),
+        "all_households": weighting(
+            [
+                ("2000", "Sydney", 30),
+                ("2000", "Inner West", 10),
+                ("2008", "Sydney", 20),
+            ],
+            "Households",
+        ),
+    }
+    combined = gw.combine_universes(frames, GEOG1, GEOG2)
+    columns = list(combined.columns)
+    assert columns.index("Households") < columns.index("Rented Households")
+
+
 def test_absent_universes_contribute_no_columns():
     combined = gw.combine_universes(
         {"rented_households": weighting([("2000", "Sydney", 6)], "Rented Households")},

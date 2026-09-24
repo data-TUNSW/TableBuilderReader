@@ -177,3 +177,65 @@ def calculate_geog_weighting(
         )
 
     return weighting
+
+
+#: Columns the ABS ships in its shapefiles that carry no analytical value.
+SHAPEFILE_BOILERPLATE_COLUMNS = (
+    "AUS_CODE21",
+    "AUS_NAME21",
+    "LOCI_URI21",
+    "SHAPE_Leng",
+    "SHAPE_Area",
+)
+
+
+def clean_shapefile_attributes(frame, name_column: str) -> pd.DataFrame:
+    """Reduce a shapefile to the attribute columns worth keeping.
+
+    Accepts a GeoDataFrame or a plain DataFrame. Drops geometry and the ABS
+    boilerplate columns, prefixes the area column with the name column so two
+    geographies' areas do not collide, and strips the name column so it can be
+    merged against a TableBuilder geography name.
+    """
+    attributes = pd.DataFrame(frame).drop(
+        columns=[*SHAPEFILE_BOILERPLATE_COLUMNS, "geometry"], errors="ignore"
+    )
+
+    for area_column in ("AREASQKM", "AREASQKM21"):
+        if area_column in attributes.columns:
+            attributes = attributes.rename(
+                columns={area_column: f"{name_column}_{area_column}"}
+            )
+
+    if name_column not in attributes.columns:
+        raise ValueError(
+            f"Shapefile does not contain the specified name column: {name_column}"
+        )
+
+    attributes[name_column] = (
+        attributes[name_column].astype("string").str.strip()
+    )
+    return attributes
+
+
+def load_shapefile_attributes(path, name_column: str) -> pd.DataFrame:
+    """Read a shapefile and reduce it to its attribute columns."""
+    return clean_shapefile_attributes(gpd.read_file(path), name_column)
+
+
+def attach_shapefile_attributes(
+    df: pd.DataFrame, attributes: pd.DataFrame, on: str, name_column: str
+) -> pd.DataFrame:
+    """Left-merge shapefile attributes onto a weightings frame.
+
+    Both sides of the key are stripped. An unstripped key is a silent failure:
+    the merge succeeds and every attribute column comes back null.
+    """
+    left = df.copy()
+    key = f"__{on}_key"
+    left[key] = left[on].astype("string").str.strip()
+
+    merged = left.merge(
+        attributes, left_on=key, right_on=name_column, how="left"
+    )
+    return merged.drop(columns=[key, name_column])

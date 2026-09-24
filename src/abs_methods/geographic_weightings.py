@@ -341,3 +341,56 @@ def combine_universes(
     for universe in present:
         ordered.extend(universe_columns(universe, geog1_name, geog2_name))
     return combined[ordered]
+
+
+def check_weightings(
+    df: pd.DataFrame,
+    geog1_name: str,
+    geog2_name: str,
+    universes,
+    tolerance: float = 1e-9,
+) -> None:
+    """Raise if a combined weightings frame is internally inconsistent.
+
+    Collects every problem rather than stopping at the first, so one run tells
+    you everything that is wrong.
+    """
+    problems: list[str] = []
+
+    duplicates = int(df.duplicated(subset=[geog1_name, geog2_name]).sum())
+    if duplicates:
+        problems.append(
+            f"{duplicates} duplicate ({geog1_name}, {geog2_name}) rows; "
+            "the most likely cause is overlapping extract chunks"
+        )
+
+    for universe in universes:
+        count = universe.count_name
+        if (df[count] < 0).any():
+            problems.append(f"{count}: negative counts")
+
+        for geog_name in (geog1_name, geog2_name):
+            total_column = f"{geog_name} Total {count}"
+            fraction_column = f"{geog_name} Fraction {count}"
+
+            if (df[count] > df[total_column]).any():
+                problems.append(f"{count}: exceeds {total_column}")
+
+            fraction = df[fraction_column]
+            if ((fraction < 0) | (fraction > 1)).any():
+                problems.append(f"{fraction_column}: outside [0, 1]")
+
+            # Only geographies that exist in this universe should sum to 1.
+            # A geography with a zero total has NaN fractions by design.
+            live = df.groupby(geog_name)[total_column].max() > 0
+            sums = df.groupby(geog_name)[fraction_column].sum(min_count=1)
+            live_sums = sums[live.reindex(sums.index, fill_value=False)]
+            off = live_sums[~np.isclose(live_sums, 1.0, atol=tolerance)]
+            if len(off):
+                problems.append(
+                    f"{fraction_column}: {len(off)} {geog_name} values do not "
+                    f"sum to 1 (worst: {off.abs().sub(1).idxmax()})"
+                )
+
+    if problems:
+        raise ValueError("Weightings QA failed:\n  " + "\n  ".join(problems))

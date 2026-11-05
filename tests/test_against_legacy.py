@@ -9,9 +9,9 @@ LEGACY_DIR = reg.GEOGRAPHY_DIR / "processed"
 
 pytestmark = pytest.mark.realdata
 
-#: POA_SAL has no extracts pulled yet, so build_all() correctly skips it and
+#: POA x SAL has no extracts pulled yet, so build_all() correctly skips it and
 #: writes no file for it. Every other registered pair is expected to build.
-BUILT_PAIRS = [pair for pair in reg.PAIRS if pair.key != "POA_SAL"]
+BUILT_PAIRS = [pair for pair in reg.PAIRS if pair.geog2 != "SAL"]
 
 POA_PAIRS = [pair for pair in BUILT_PAIRS if pair.geog1 == "POA"]
 
@@ -25,6 +25,21 @@ def _skip_if_missing(path):
         pytest.skip(
             f"missing {path.name}; run python -m abs_methods.build_weightings first"
         )
+
+
+def _read_as_legacy(pair: reg.GeographyPair) -> pd.DataFrame:
+    """A combined file with its postcode columns renamed to the legacy names.
+
+    The combined files carry the POA edition in the column name
+    (``Postcode (2021)``); the legacy processed/ files say ``Postcode``.
+    Renaming lets the comparisons below join the two on the same keys.
+    """
+    path = _combined_path(pair)
+    if not path.exists():
+        pytest.skip("run python -m abs_methods.build_weightings first")
+    df = pd.read_csv(path, dtype={pair.geog1_name: str})
+    df.columns = df.columns.str.replace(pair.geog1_name, "Postcode", regex=False)
+    return df
 
 
 def _read_header(path) -> list[str]:
@@ -88,10 +103,7 @@ def combined_frame_cache():
 
 @pytest.fixture(scope="module")
 def combined_poa_lga():
-    path = reg.WEIGHTINGS_DIR / "POA_LGA(2025)_Weightings.csv"
-    if not path.exists():
-        pytest.skip("run python -m abs_methods.build_weightings first")
-    return pd.read_csv(path, dtype={"Postcode": str})
+    return _read_as_legacy(reg.PAIRS_BY_KEY["POA2021_LGA2025_C2021"])
 
 
 @pytest.fixture(scope="module")
@@ -162,8 +174,8 @@ def test_leading_zero_postcodes_survive_the_round_trip(combined_poa_lga):
 def test_expected_weightings_files_exist():
     """weightings/ has exactly one file per built pair plus the README.
 
-    POA_SAL is deliberately excluded: its extracts are not pulled yet, so
-    build_all() skips it and writes no POA_SAL(...)_Weightings.csv. If this
+    POA x SAL is deliberately excluded: its extracts are not pulled yet, so
+    build_all() skips it and writes no file for it. If this
     ever changes to include a partial write, or a pair silently fails to
     write while the others still pass, this is the test that would catch it.
     """
@@ -176,9 +188,9 @@ def test_expected_weightings_files_exist():
 
 
 # ---------------------------------------------------------------------------
-# 2. A second universe against legacy: POA_SED All Households.
+# 2. A second universe against legacy: POA x SED All Households.
 #
-# POA_LGA's tests above only ever compare the "Rented Households" universe.
+# POA x LGA's tests above only ever compare the "Rented Households" universe.
 # This compares "Households" on a different pair, which is what would catch
 # a fraction column accidentally wired up to the wrong universe.
 # ---------------------------------------------------------------------------
@@ -186,10 +198,7 @@ def test_expected_weightings_files_exist():
 
 @pytest.fixture(scope="module")
 def combined_poa_sed():
-    path = reg.WEIGHTINGS_DIR / "POA_SED(2025)_Weightings.csv"
-    if not path.exists():
-        pytest.skip("run python -m abs_methods.build_weightings first")
-    return pd.read_csv(path, dtype={"Postcode": str})
+    return _read_as_legacy(reg.PAIRS_BY_KEY["POA2021_SED2025_C2021"])
 
 
 @pytest.fixture(scope="module")
@@ -338,11 +347,12 @@ def test_fraction_nan_matches_zero_total(pair, universe, side, combined_frame_ca
 def test_postcode_survives_round_trip_in_every_poa_file(pair):
     path = _combined_path(pair)
     _skip_if_missing(path)
-    df = pd.read_csv(path, dtype={"Postcode": str})
-    lengths = df["Postcode"].str.len()
+    column = pair.geog1_name
+    df = pd.read_csv(path, dtype={column: str})
+    lengths = df[column].str.len()
     bad = lengths[lengths != 4]
     assert bad.empty, (
-        f"{pair.output_filename}: {len(bad)} Postcode values are not 4 "
+        f"{pair.output_filename}: {len(bad)} {column} values are not 4 "
         f"characters after the write/read round trip "
-        f"(e.g. {df.loc[bad.index[0], 'Postcode']!r})"
+        f"(e.g. {df.loc[bad.index[0], column]!r})"
     )

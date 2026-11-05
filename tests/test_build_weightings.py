@@ -63,7 +63,7 @@ def test_read_universe_zero_pads_postcodes(fake_extracts):
 
 
 def test_build_pair_returns_none_when_no_extract_exists(tmp_path):
-    pair = reg.PAIRS_BY_KEY["POA_SAL"]
+    pair = reg.PAIRS_BY_KEY["POA2021_SAL2021_C2021"]
     assert bw.build_pair(pair, raw_dir=tmp_path, out_dir=tmp_path, write=False) is None
 
 
@@ -72,32 +72,36 @@ def test_build_pair_writes_one_file_named_by_the_registry(
 ):
     out_dir = tmp_path / "out"
     pair = reg.GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources={"rented_households": "chunk-*.csv"},
     )
 
     df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=out_dir, write=True)
 
-    assert (out_dir / "POA_SAL_Weightings.csv").exists()
-    assert list(df.columns)[:2] == ["Postcode", "Suburb"]
+    assert (out_dir / "POA2021_SAL2021_C2021_Weightings.csv").exists()
+    assert list(df.columns)[:2] == ["Postcode (2021)", "Suburb (2021)"]
 
 
 def test_built_file_passes_its_own_qa(fake_extracts, tmp_path):
     pair = reg.GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources={"rented_households": "chunk-*.csv"},
     )
     df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
 
-    by_postcode = df.groupby("Postcode")["Postcode Fraction Rented Households"].sum()
+    by_postcode = df.groupby("Postcode (2021)")[
+        "Postcode (2021) Fraction Rented Households"
+    ].sum()
     assert by_postcode.tolist() == pytest.approx([1.0, 1.0])
 
 
@@ -114,20 +118,22 @@ def test_build_pair_weights_cross_border_postcode_correctly(fake_extracts, tmp_p
     build_pair or looks at a fraction.
     """
     pair = reg.GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources={"rented_households": "chunk-*.csv"},
     )
     df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
 
-    postcode_rows = df[df["Postcode"] == "0800"]
-    fractions = sorted(postcode_rows["Postcode Fraction Rented Households"].tolist())
+    postcode_rows = df[df["Postcode (2021)"] == "0800"]
+    fraction_column = "Postcode (2021) Fraction Rented Households"
+    fractions = sorted(postcode_rows[fraction_column].tolist())
     assert fractions == pytest.approx([0.25, 0.75])
     assert (
-        postcode_rows["Postcode Fraction Rented Households"].sum()
+        postcode_rows["Postcode (2021) Fraction Rented Households"].sum()
         == pytest.approx(1.0)
     )
 
@@ -141,11 +147,12 @@ def test_build_pair_warns_when_a_configured_shapefile_is_missing(
     """
     missing_shapefile = tmp_path / "does_not_exist.shp"
     pair = reg.GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources={"rented_households": "chunk-*.csv"},
         geog1_shapefile=missing_shapefile,
         geog1_shapefile_name="POA_NAME21",
@@ -154,8 +161,8 @@ def test_build_pair_warns_when_a_configured_shapefile_is_missing(
     df = bw.build_pair(pair, raw_dir=fake_extracts, out_dir=tmp_path, write=False)
 
     captured = capsys.readouterr()
-    assert "POA_SAL" in captured.out
-    assert "Postcode" in captured.out
+    assert "POA2021_SAL2021_C2021" in captured.out
+    assert "Postcode (2021)" in captured.out
     assert str(missing_shapefile) in captured.out
     assert df is not None
     assert len(df) > 0
@@ -168,11 +175,12 @@ def test_build_pair_is_silent_when_no_shapefile_is_configured(
     pair has none" and must not print anything about a missing shapefile.
     """
     pair = reg.GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources={"rented_households": "chunk-*.csv"},
     )
 
@@ -184,10 +192,10 @@ def test_build_pair_is_silent_when_no_shapefile_is_configured(
 
 def test_readme_lists_each_built_file_and_its_universes():
     built = {
-        "POA_SAL": pd.DataFrame(
-            columns=["Postcode", "Suburb", "Rented Households"]
+        "POA2021_SAL2021_C2021": pd.DataFrame(
+            columns=["Postcode (2021)", "Suburb (2021)", "Rented Households"]
         )
     }
     readme = bw.render_readme(built)
-    assert "POA_SAL_Weightings.csv" in readme
+    assert "POA2021_SAL2021_C2021_Weightings.csv" in readme
     assert "Rented Households" in readme

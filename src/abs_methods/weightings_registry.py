@@ -71,20 +71,58 @@ def normalise_geography_column(series: pd.Series, geography: str) -> pd.Series:
     return values
 
 
+#: The Census whose counts every extract under RAW_DIR comes from.
+CENSUS_YEAR = 2021
+
+
 @dataclass(frozen=True)
 class GeographyPair:
-    """One geography pair and where its universes come from."""
+    """One geography pair and where its universes come from.
 
-    key: str
+    A pair is identified by three versions, because any one of them changing
+    changes the fractions: each geography's ASGS edition (the year of the
+    boundary release, e.g. POA 2021, LGA 2025) and the Census the counts come
+    from. All three go into the key and the output filename, so a file built
+    on new boundaries or a new Census sits beside the old one instead of
+    silently replacing it. LGA, SED and CED are re-released as often as
+    yearly; POA, SAL and the SAs every five years.
+
+    Each geography's column name must end with its edition in brackets, e.g.
+    ``Postcode (2021)``, so the year travels with the column into whatever
+    joins against it.
+    """
+
     geog1: str
+    geog1_edition: int
     geog1_name: str
     geog2: str
+    geog2_edition: int
     geog2_name: str
     sources: dict[str, str | list[str]]
+    census: int = CENSUS_YEAR
     geog1_shapefile: Path | None = None
     geog1_shapefile_name: str | None = None
     geog2_shapefile: Path | None = None
     geog2_shapefile_name: str | None = None
+
+    def __post_init__(self) -> None:
+        for name, edition in (
+            (self.geog1_name, self.geog1_edition),
+            (self.geog2_name, self.geog2_edition),
+        ):
+            if not name.endswith(f"({edition})"):
+                raise ValueError(
+                    f"column name {name!r} must end with its edition "
+                    f"'({edition})'"
+                )
+
+    @property
+    def key(self) -> str:
+        """e.g. ``POA2021_LGA2025_C2021``."""
+        return (
+            f"{self.geog1}{self.geog1_edition}_"
+            f"{self.geog2}{self.geog2_edition}_C{self.census}"
+        )
 
     @property
     def output_filename(self) -> str:
@@ -137,10 +175,11 @@ def _poa_sources(geog2_token: str, chunked: bool = False) -> dict[str, str | lis
 
 PAIRS: tuple[GeographyPair, ...] = (
     GeographyPair(
-        key="POA_LGA(2025)",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="LGA",
+        geog2_edition=2025,
         geog2_name="Local Government Area (2025)",
         sources=_poa_sources("LGA(2025)"),
         geog1_shapefile=_POA_SHAPEFILE,
@@ -149,10 +188,11 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog2_shapefile_name="LGA_NAME25",
     ),
     GeographyPair(
-        key="POA_SED(2025)",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SED",
+        geog2_edition=2025,
         geog2_name="State Electorate (2025)",
         sources=_poa_sources("SED(2025)"),
         geog1_shapefile=_POA_SHAPEFILE,
@@ -161,10 +201,11 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog2_shapefile_name="SED_NAME25",
     ),
     GeographyPair(
-        key="POA_CED(2025)",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="CED",
+        geog2_edition=2025,
         geog2_name="Federal Electorate (2025)",
         sources=_poa_sources("CED(2025)"),
         geog1_shapefile=_POA_SHAPEFILE,
@@ -173,11 +214,12 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog2_shapefile_name="CED_NAME25",
     ),
     GeographyPair(
-        key="POA_SA3",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SA3",
-        geog2_name="SA3",
+        geog2_edition=2021,
+        geog2_name="SA3 (2021)",
         sources=_poa_sources("SA3"),
         geog1_shapefile=_POA_SHAPEFILE,
         geog1_shapefile_name="POA_NAME21",
@@ -185,11 +227,12 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog2_shapefile_name="SA3_NAME21",
     ),
     GeographyPair(
-        key="POA_SAL",
         geog1="POA",
-        geog1_name="Postcode",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
         geog2="SAL",
-        geog2_name="Suburb",
+        geog2_edition=2021,
+        geog2_name="Suburb (2021)",
         sources=_poa_sources("SAL", chunked=True),
         geog1_shapefile=_POA_SHAPEFILE,
         geog1_shapefile_name="POA_NAME21",
@@ -197,11 +240,12 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog2_shapefile_name="SAL_NAME21",
     ),
     GeographyPair(
-        key="SA1_LGA",
         geog1="SA1",
-        geog1_name="SA1",
+        geog1_edition=2021,
+        geog1_name="SA1 (2021)",
         geog2="LGA",
-        geog2_name="LGA",
+        geog2_edition=2021,
+        geog2_name="Local Government Area (2021)",
         sources={"rented_households": "2021_TBD_SA1_LGA_TEND-Rented.csv"},
         geog1_shapefile=SHAPEFILE_DIRS[2021] / "SA1_2021_AUST_GDA2020.shp",
         geog1_shapefile_name="SA1_CODE21",

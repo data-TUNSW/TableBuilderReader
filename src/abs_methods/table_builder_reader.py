@@ -13,6 +13,25 @@ pd.options.mode.copy_on_write = True  # Removes SettingWithCopyWarning:
 # Normal print if kwarg debug is True else print nothing
 
 
+#: State codes used to name per-state chunks of a cross-tab too big for
+#: TableBuilder's 40m-cell cap, e.g. ``2021_TBD_POA_SAL-NSW_DWTD-Occupied.csv``.
+#: Must match ``weightings_registry.CHUNK_STATES`` (a test checks this).
+STATE_CHUNK_CODES = ("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT", "OT")
+
+
+def strip_chunk_suffix(token):
+    """``SAL-NSW`` -> ``SAL``; any other token is returned unchanged.
+
+    A ``-`` in a filename token otherwise means ``<variable>-<category>``
+    (a filter such as ``TEND-Rented``). A state code after the ``-`` marks a
+    per-state chunk of the variable instead, so it is part of the geography.
+    """
+    base, sep, suffix = token.removesuffix(".csv").partition("-")
+    if sep and suffix in STATE_CHUNK_CODES:
+        return base
+    return token
+
+
 def debug_print(message, debug=False):
     """
     Prints the message if debug is True, otherwise does nothing.
@@ -155,11 +174,14 @@ class TableBuilderReader:
         lga_shapefile_path=None,
         **kwargs,
     ):
-        self.full_file_name = file_name
-        self.file_name = file_name.split("/")[-1]
         self.filters = {}  # {"TEND": "Rented"}
         self.__dict__.update(locals())
         self.__dict__.update(kwargs)
+        # After the update above, which would otherwise put the full path back.
+        self.full_file_name = file_name
+        # The name alone: the variables and filters are parsed from it, so a
+        # directory with "-" or "_" in it (Windows paths use "\") must not leak in.
+        self.file_name = os.path.basename(file_name)
         self.variables = {}  # {"LGA": ["Albury", "Adelaide", ...], "HIED": []}
         self.count = ""  # Dwellings, Persons etc
         self.count_code = ""  # TBD, TBP, TBP15 etc
@@ -438,6 +460,7 @@ class TableBuilderReader:
         variable_names = []
         variable_descriptions = []
         for var in variables:
+            var = strip_chunk_suffix(var)
             if "(" in var and ")" in var:
                 # Extract base name and bracket content
                 base = var.split("(")[0]
@@ -482,7 +505,7 @@ class TableBuilderReader:
                     for var in [
                         key.split("-")
                         for key in self.file_name.split("_")
-                        if "-" in key
+                        if "-" in key and strip_chunk_suffix(key) == key
                     ]
                 }
 

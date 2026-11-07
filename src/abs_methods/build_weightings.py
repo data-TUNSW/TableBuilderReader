@@ -46,14 +46,19 @@ def read_universe(
 
 def build_pair(
     pair: reg.GeographyPair,
-    raw_dir: Path = reg.RAW_DIR,
+    raw_dir: Path | None = None,
     out_dir: Path = reg.WEIGHTINGS_DIR,
     write: bool = True,
 ) -> pd.DataFrame | None:
     """Build one geography pair's combined weightings file.
 
+    `raw_dir` defaults to the pair's own Census raw folder (`pair.raw_dir`);
+    pass one to override it, e.g. in tests.
+
     Returns None when none of the pair's universes has an extract yet.
     """
+    if raw_dir is None:
+        raw_dir = pair.raw_dir
     frames: dict[str, pd.DataFrame] = {}
     for universe in gw.UNIVERSES:
         pattern = pair.sources.get(universe.key)
@@ -116,11 +121,15 @@ def build_pair(
 
 
 def build_all(
-    raw_dir: Path = reg.RAW_DIR,
+    raw_dir: Path | None = None,
     out_dir: Path = reg.WEIGHTINGS_DIR,
     write: bool = True,
 ) -> dict[str, pd.DataFrame]:
-    """Build every registered pair, then write the README."""
+    """Build every registered pair, then write the README.
+
+    Each pair reads from its own Census raw folder unless `raw_dir` overrides
+    it for all of them.
+    """
     built: dict[str, pd.DataFrame] = {}
     for pair in reg.PAIRS:
         combined = build_pair(pair, raw_dir=raw_dir, out_dir=out_dir, write=write)

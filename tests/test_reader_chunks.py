@@ -84,6 +84,65 @@ def test_ordinary_filter_still_parsed(tmp_path):
     assert list(reader.variables) == ["POA", "SAL"]
 
 
+@pytest.mark.parametrize(
+    "token, expected",
+    [
+        ("SAL-NSW", "SAL"),
+        ("SAL-OT.csv", "SAL"),
+        ("SAL(EN)-VIC", "SAL(EN)"),
+        # A state code after a state variable is a filter, not a chunk:
+        # 2021_TBP_TEND_STATE-NSW.csv is TEND filtered to NSW.
+        ("STATE-NSW", "STATE-NSW"),
+        ("STE-NSW.csv", "STE-NSW.csv"),
+        ("TEND-Rented", "TEND-Rented"),
+        ("HCFMD(2 digit)", "HCFMD(2 digit)"),
+    ],
+)
+def test_strip_chunk_suffix(token, expected):
+    assert tbr.strip_chunk_suffix(token) == expected
+
+
+STATE_FILTER_HEADER = """Australian Bureau of Statistics
+
+"2021 Census - counting persons, place of usual residence"
+"TEND Tenure Type"
+"Counting: Persons Place of Usual Residence"
+
+Filters:
+"Default Summation","Persons Place of Usual Residence"
+"STATE (UR)","New South Wales"
+
+
+"TEND Tenure Type",
+"""
+
+STATE_FILTER_BODY = """"Owned outright",100,
+"Rented",50,
+"Total",150,
+"""
+
+
+def test_state_filter_is_not_a_chunk(tmp_path):
+    path = tmp_path / "2021_TBP_TEND_STATE-NSW.csv"
+    path.write_text(
+        STATE_FILTER_HEADER + STATE_FILTER_BODY + FOOTER, encoding="utf-8"
+    )
+    reader = tbr.TableBuilderReader(str(path))
+    assert reader.filters == {"STATE": "NSW"}
+    assert list(reader.variables) == ["TEND"]
+    assert len(reader.df) == 2
+
+
+def test_directory_dashes_do_not_leak_into_filters(tmp_path):
+    folder = tmp_path / "TEND-Rented_2021_TBP_x"
+    folder.mkdir()
+    path = folder / "2021_TBD_POA_SAL-OT_DWTD-Occupied.csv"
+    path.write_text(HEADER + BODY + FOOTER, encoding="utf-8")
+    reader = tbr.TableBuilderReader(str(path))
+    assert reader.filters == {"DWTD": "Occupied"}
+    assert reader.full_file_name == str(path)
+
+
 # --- real per-state files on the shared drive --------------------------------
 
 RAW = reg.RAW_DIR
@@ -114,6 +173,14 @@ def test_real_chunk_file(name, count, n_sal):
     # The state's SALs, less its Migratory - Offshore - Shipping category.
     assert df["SAL"].nunique() == n_sal
     assert df[count].sum() > 0
+
+
+@pytest.mark.realdata
+def test_real_state_filter_file():
+    reader = tbr.TableBuilderReader(str(_real("2021_TBP_TEND_STATE-NSW.csv")))
+    assert reader.filters == {"STATE": "NSW"}
+    assert list(reader.variables) == ["TEND"]
+    assert reader.df["Persons"].sum() > 0
 
 
 @pytest.mark.realdata

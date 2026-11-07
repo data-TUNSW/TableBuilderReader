@@ -18,16 +18,26 @@ pd.options.mode.copy_on_write = True  # Removes SettingWithCopyWarning:
 #: Must match ``weightings_registry.CHUNK_STATES`` (a test checks this).
 STATE_CHUNK_CODES = ("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT", "OT")
 
+#: Variables whose categories are themselves state codes. ``STATE-NSW`` is a
+#: real filter (``2021_TBP_TEND_STATE-NSW.csv`` is TEND for NSW only), never a
+#: chunk, so a state code after one of these is left as a filter.
+STATE_VARIABLES = ("STATE", "STE")
+
 
 def strip_chunk_suffix(token):
     """``SAL-NSW`` -> ``SAL``; any other token is returned unchanged.
 
     A ``-`` in a filename token otherwise means ``<variable>-<category>``
     (a filter such as ``TEND-Rented``). A state code after the ``-`` marks a
-    per-state chunk of the variable instead, so it is part of the geography.
+    per-state chunk of the variable instead, so it is part of the geography,
+    unless the variable is itself a state (``STATE-NSW`` stays a filter).
     """
     base, sep, suffix = token.removesuffix(".csv").partition("-")
-    if sep and suffix in STATE_CHUNK_CODES:
+    if (
+        sep
+        and suffix in STATE_CHUNK_CODES
+        and base.split("(")[0].strip() not in STATE_VARIABLES
+    ):
         return base
     return token
 

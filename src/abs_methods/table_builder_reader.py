@@ -238,11 +238,18 @@ class TableBuilderReader:
                     ]
             if not self.overseas:
                 for j in range(len(self.df.columns) - 1):
+                    # case=False because the capitalisation is not stable across
+                    # extracts: the 2016 HEAP tables label this category "Overseas
+                    # Visitor" while 2016 HSCP and every 2021 table use "Overseas
+                    # visitor". A case-sensitive match silently kept the 2016 HEAP
+                    # rows and dropped their 2021 counterparts, so any percentage
+                    # derived from both years was computed over two different
+                    # populations.
                     self.df = self.df[
                         ~(
                             self.df.iloc[:, j]
                             .astype(str)
-                            .str.contains("Overseas visitor")
+                            .str.contains("Overseas visitor", case=False)
                         )
                     ]
             if self.clean_poa:

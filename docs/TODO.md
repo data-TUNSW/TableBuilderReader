@@ -30,6 +30,36 @@
 
 _added 2026-11-06_
 
+### Find why national totals differ from a direct parse on a large multi-variable table
+
+- For `2021_TBP_POA_RPIP_HCFMD(2 digit)_BPLP(2 digit)_TENLLD-REA.csv` (12.6m cells, three
+  stacked variables, BPLP in columns), the reader's national total of primary-family
+  reference persons was about half a direct parse of the same file (1.18m against 2.39m),
+  while totals over a subset of POAs matched exactly. Reproduce it, find the cause, and add
+  a regression test.
+
+_added 2026-11-07_
+
+### Label stacked columns in stacked order and add the families count code
+
+- When `column_variable` is not the last variable in the file name, the reader labels the
+  stacked columns in file-name order, so they land on the wrong variable. Label them in
+  stacked order, and give the families dataset (`TBF`) and dwellings (`TBD`) count codes
+  wherever the column-variable path needs them. Bond Loss works around both with a
+  `ColumnLastReader` subclass.
+
+_added 2026-11-07_
+
+### Read ACTEID extracts
+
+- Accept tables from the Australian Census and Temporary Entrants datasets: the title line
+  reads "Weighted count of Person level", the geography is labelled "Postal Areas (EN)" or
+  "POAUCD Postal Areas (EN)", counts are weighted decimals, each count column is followed by
+  RSE and Annotations columns, and a Symbol / Description block precedes the copyright
+  lines.
+
+_added 2026-11-07_
+
 ## Later / Someday
 
 ## Done (last 60 days)

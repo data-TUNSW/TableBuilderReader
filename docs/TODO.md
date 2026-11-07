@@ -17,8 +17,6 @@
 
 ## Working on
 
-## To do
-
 ### Add POA-to-GCCSA weightings
 
 - Register a POA x GCCSA pair in `weightings_registry.py` and generate the combined
@@ -28,7 +26,9 @@
   Requested by the Bond Loss cluster demographics work, which needs a Greater Sydney
   comparator.
 
-_added 2026-11-06_
+_added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-gccsa-weightings_
+
+## To do
 
 ### Find why national totals differ from a direct parse on a large multi-variable table
 

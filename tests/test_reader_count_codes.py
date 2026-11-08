@@ -17,6 +17,7 @@ from abs_methods import table_builder_reader as tbr
         ("2021_TBP_POA_SEXP.csv", "Persons", "TBP"),
         ("2021_TBP15_POA_SEXP.csv", "Persons over 15", "TBP15"),
         ("TBP15_POA_SEXP.csv", "Persons over 15", "TBP15"),
+        ("2021_TBF_POA_FMCF.csv", "Families", "TBF"),
         # A filter category that happens to contain a code is not the dataset.
         ("2021_TBP_POA_DWTD-TBD.csv", "Persons", "TBP"),
     ],

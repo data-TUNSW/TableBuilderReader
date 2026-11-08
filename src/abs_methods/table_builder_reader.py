@@ -230,21 +230,20 @@ class TableBuilderReader:
                     index_col=False,
                     engine="python",
                 )
-                for j in range(self.df.shape[1]):  # Forward fill if >50% missing
-                    if self.df.iloc[:, j].isna().sum() / len(self.df.iloc[:, j]) > 0.5:
-                        self.df.iloc[:, j] = self.df.iloc[:, j].ffill()
-                index_dummy = [
-                    self.df.columns[j]
-                    for j in range(
-                        len(
-                            [
-                                key
-                                for key in self.variables
-                                if key != self.column_variable and key != self.count
-                            ]
-                        )
-                    )
-                ]
+                n_row_variables = len(
+                    [
+                        key
+                        for key in self.variables
+                        if key != self.column_variable and key != self.count
+                    ]
+                )
+                index_dummy = list(self.df.columns[:n_row_variables])
+                # TableBuilder writes each row label once, on the first row of
+                # its block. Fill every row variable. This used to fill only
+                # columns more than half blank, so an outer variable with two
+                # categories under it (POA over Male/Female) was exactly half
+                # blank, stayed unfilled, and dropna below lost half the rows.
+                self.df[index_dummy] = self.df[index_dummy].ffill()
                 self.df = (
                     self.df.set_index(index_dummy)
                     .stack(future_stack=True)
@@ -418,6 +417,7 @@ class TableBuilderReader:
         "TBD": "Dwellings",
         "TBP": "Persons",
         "TBP15": "Persons over 15",
+        "TBF": "Families",
     }
 
     def set_count(self):
@@ -508,6 +508,13 @@ class TableBuilderReader:
             variable_names[i]: {"data": [], "description": variable_descriptions[i]}
             for i in range(len(variable_names))
         }
+        # The column variable is stacked into the last position of the long
+        # frame whatever its place in the file name, so it goes last here too
+        # and the frame's columns are labelled in stacked order.
+        if self.column_variable in self.variables:
+            self.variables[self.column_variable] = self.variables.pop(
+                self.column_variable
+            )
         if self.df is not None:
             for variable in self.variables.keys():
                 if variable in self.df.columns:

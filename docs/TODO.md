@@ -17,16 +17,6 @@
 
 ## Working on
 
-### Label stacked columns in stacked order and add the families count code
-
-- When `column_variable` is not the last variable in the file name, the reader labels the
-  stacked columns in file-name order, so they land on the wrong variable. Label them in
-  stacked order, and give the families dataset (`TBF`) and dwellings (`TBD`) count codes
-  wherever the column-variable path needs them. Bond Loss works around both with a
-  `ColumnLastReader` subclass.
-
-_added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · stacked-column-labels_
-
 ### Read ACTEID extracts
 
 - Accept tables from the Australian Census and Temporary Entrants datasets: the title line

@@ -72,6 +72,30 @@ df_percentage = reader.df_percentage
 - `category_grouping`: Dictionary for grouping categories.
 - `groupby_columns`: Columns to group by and aggregate.
 - `min_max_normalisation`, `standardised`: Control normalisation and standardisation of percentages.
+- `column_variable`: The variable laid across the columns (e.g. `"LFSP"`). It can sit anywhere
+  in the file name; the long frame always puts it last, after the row variables.
+
+The count column is named from the dataset code in the file name: `TBP` Persons, `TBP15`
+Persons over 15, `TBD` Dwellings, `TBF` Families.
+
+## ACTEID extracts
+
+Tables from the Australian Census and Temporary Entrants datasets (title line "Weighted
+count of Person level") are recognised from their title lines and read by a separate path:
+
+- The geography label ("Postal Areas (EN)", "POAUCD Postal Areas (EN)", "Main Statistical
+  Area Structure (Main ASGS) (EN)") is matched to the file name by position, so name the
+  file with the usual code (`POA`, `STE`).
+- Counts are weighted decimals. Each count's RSE is kept in an `RSE` column after the
+  count; the Annotations columns are dropped.
+- The column variable is read from the header, so `column_variable` is optional. If given,
+  it must match the file.
+- Total, Migratory and Overseas visitor rows and columns are dropped as for Census tables.
+
+```python
+reader = TableBuilderReader("2021_TBP_STE_SEXP_VISAP_LFSP_TENLLD-REA.csv")
+reader.df.columns  # STE, SEXP, VISAP, LFSP, Persons, RSE
+```
 
 ## Requirements
 

@@ -205,13 +205,18 @@ class TableBuilderReader:
         self.df_percentage = None
         self.shapefile = shapefile
         self.shapefile_df = None
+        self.acteid = False
         if self.infer_from_file_name:
             self.filtered_variables()
             self.set_count()
             self.set_variables()
-            self.detect_variables_row()
-            self.detect_footer_row()
-            if self.column_variable is None:
+            self.acteid = self.detect_acteid()
+            if not self.acteid:
+                self.detect_variables_row()
+                self.detect_footer_row()
+            if self.acteid:
+                self.df = self.read_acteid()
+            elif self.column_variable is None:
                 self.df = pd.read_csv(
                     self.full_file_name,
                     skiprows=self.variable_row,
@@ -538,6 +543,101 @@ class TableBuilderReader:
                         if "-" in key and strip_chunk_suffix(key) == key
                     ]
                 }
+
+    #: Title-line text that marks an Australian Census and Temporary Entrants
+    #: (ACTEID) extract rather than a Census one.
+    ACTEID_MARKERS = (
+        "Australian Census and Temporary Entrants",
+        "Weighted count of Person level",
+    )
+
+    def detect_acteid(self, limit_rows=12):
+        """True if the title lines mark the file as an ACTEID extract."""
+        with open(self.full_file_name, newline="", encoding="utf-8-sig") as f:
+            for i, row in enumerate(csv.reader(f)):
+                if i >= limit_rows:
+                    break
+                if row and any(m in row[0] for m in self.ACTEID_MARKERS):
+                    return True
+        return False
+
+    def read_acteid(self):
+        """Long frame from an ACTEID extract: row variables, the column
+        variable (if any), the count and its RSE.
+
+        ACTEID extracts label the geography differently from Census ones
+        ("Postal Areas (EN)", "POAUCD Postal Areas (EN)", "Main Statistical Area
+        Structure (Main ASGS) (EN)"), so the row variables are matched to the
+        file name by position, not by label. Counts are weighted decimals, each
+        followed by "- RSE" and "- Annotations" columns: the RSE is kept as a
+        column and the Annotations are dropped. The data rows end at the first
+        blank line, so the Symbol / Description footer block is never read.
+
+        The column variable is read from the header cell above the row labels
+        ("Counting" means there is none). If ``column_variable`` was given it
+        must match; if not, it is set from the header.
+        """
+        with open(self.full_file_name, newline="", encoding="utf-8-sig") as f:
+            rows = list(csv.reader(f))
+        # The row-variable name line is the first with a non-empty first cell
+        # that follows a line starting with an empty cell (the column header).
+        for i in range(1, len(rows)):
+            prev, cur = rows[i - 1], rows[i]
+            if prev and prev[0] == "" and len(prev) > 2 and cur and cur[0] != "":
+                header, start = prev, i + 1
+                n_rows = len([c for c in cur if c != ""])
+                break
+        else:
+            raise ValueError(f"No header row found in ACTEID file {self.file_name}")
+        label = header[n_rows - 1]
+        if label == "Counting":
+            column_variable = None
+        else:
+            column_variable = label.split(" ")[0]
+            if column_variable not in self.variables:
+                raise ValueError(
+                    f"Column variable {column_variable!r} in {self.file_name} is not "
+                    + f"in the file name variables {list(self.variables)}"
+                )
+        if self.column_variable is not None and self.column_variable != column_variable:
+            raise ValueError(
+                f"column_variable={self.column_variable!r} but {self.file_name} has "
+                + f"{column_variable!r} in its columns"
+            )
+        if column_variable is not None and self.column_variable is None:
+            self.column_variable = column_variable
+            self.set_variables()  # puts the column variable last
+        row_variables = [v for v in self.variables if v != column_variable]
+        if len(row_variables) != n_rows:
+            raise ValueError(
+                f"{self.file_name} has {n_rows} row variables in the file but "
+                + f"{row_variables} in its name"
+            )
+        # Count columns, each with the position of its RSE column (or None).
+        count_columns = []
+        for j in range(n_rows, len(header)):
+            name = header[j]
+            if name == "" or name.endswith(" - RSE") or name.endswith(" - Annotations"):
+                continue
+            rse = j + 1 if header[j + 1 : j + 2] == [f"{name} - RSE"] else None
+            count_columns.append((j, name, rse))
+
+        def number(row, j):
+            if j is None or j >= len(row) or row[j] == "":
+                return np.nan
+            return float(row[j])
+
+        records, last = [], [""] * n_rows
+        for row in rows[start:]:
+            if not row or all(cell == "" for cell in row):
+                break
+            last = [row[j] if row[j] != "" else last[j] for j in range(n_rows)]
+            for j, name, rse in count_columns:
+                labels = last + ([name] if column_variable else [])
+                records.append((*labels, number(row, j), number(row, rse)))
+        return pd.DataFrame(
+            records, columns=list(self.variables) + [self.count, "RSE"]
+        )
 
     def detect_variables_row(self, limit_rows=100):
         truth_list = {

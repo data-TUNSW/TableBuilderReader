@@ -17,16 +17,6 @@
 
 ## Working on
 
-### Read ACTEID extracts
-
-- Accept tables from the Australian Census and Temporary Entrants datasets: the title line
-  reads "Weighted count of Person level", the geography is labelled "Postal Areas (EN)" or
-  "POAUCD Postal Areas (EN)", counts are weighted decimals, each count column is followed by
-  RSE and Annotations columns, and a Symbol / Description block precedes the copyright
-  lines.
-
-_added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · acteid-extracts_
-
 ### Add POA-to-GCCSA weightings
 
 - Register a POA x GCCSA pair in `weightings_registry.py` and generate the combined
@@ -43,6 +33,16 @@ _added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-
 ## Later / Someday
 
 ## Done (last 60 days)
+
+### Read ACTEID extracts
+
+- Accept tables from the Australian Census and Temporary Entrants datasets: the title line
+  reads "Weighted count of Person level", the geography is labelled "Postal Areas (EN)" or
+  "POAUCD Postal Areas (EN)", counts are weighted decimals, each count column is followed by
+  RSE and Annotations columns, and a Symbol / Description block precedes the copyright
+  lines.
+
+_added 2026-11-07 · started 2026-11-07 · done 2026-11-08 · branch `reader-cluster-fixes` · acteid-extracts_
 
 ### Label stacked columns in stacked order and add the families count code
 

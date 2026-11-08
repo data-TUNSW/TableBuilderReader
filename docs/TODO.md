@@ -17,16 +17,6 @@
 
 ## Working on
 
-### Find why national totals differ from a direct parse on a large multi-variable table
-
-- For `2021_TBP_POA_RPIP_HCFMD(2 digit)_BPLP(2 digit)_TENLLD-REA.csv` (12.6m cells, three
-  stacked variables, BPLP in columns), the reader's national total of primary-family
-  reference persons was about half a direct parse of the same file (1.18m against 2.39m),
-  while totals over a subset of POAs matched exactly. Reproduce it, find the cause, and add
-  a regression test.
-
-_added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · national-totals-mismatch_
-
 ### Label stacked columns in stacked order and add the families count code
 
 - When `column_variable` is not the last variable in the file name, the reader labels the
@@ -63,3 +53,13 @@ _added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-
 ## Later / Someday
 
 ## Done (last 60 days)
+
+### Find why national totals differ from a direct parse on a large multi-variable table
+
+- For `2021_TBP_POA_RPIP_HCFMD(2 digit)_BPLP(2 digit)_TENLLD-REA.csv` (12.6m cells, three
+  stacked variables, BPLP in columns), the reader's national total of primary-family
+  reference persons was about half a direct parse of the same file (1.18m against 2.39m),
+  while totals over a subset of POAs matched exactly. Reproduce it, find the cause, and add
+  a regression test.
+
+_added 2026-11-07 · started 2026-11-07 · done 2026-11-08 · branch `reader-cluster-fixes` · national-totals-mismatch_

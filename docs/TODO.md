@@ -44,6 +44,16 @@ _added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-
 
 ## Done (last 60 days)
 
+### Label stacked columns in stacked order and add the families count code
+
+- When `column_variable` is not the last variable in the file name, the reader labels the
+  stacked columns in file-name order, so they land on the wrong variable. Label them in
+  stacked order, and give the families dataset (`TBF`) and dwellings (`TBD`) count codes
+  wherever the column-variable path needs them. Bond Loss works around both with a
+  `ColumnLastReader` subclass.
+
+_added 2026-11-07 · started 2026-11-07 · done 2026-11-08 · branch `reader-cluster-fixes` · stacked-column-labels_
+
 ### Find why national totals differ from a direct parse on a large multi-variable table
 
 - For `2021_TBP_POA_RPIP_HCFMD(2 digit)_BPLP(2 digit)_TENLLD-REA.csv` (12.6m cells, three

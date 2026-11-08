@@ -411,16 +411,22 @@ class TableBuilderReader:
             )
             # Optionally update self.variables for the new group
 
+    #: Dataset code in the file name -> count name. Matched as a whole
+    #: ``_``-separated token, so ``TBP15`` is not read as ``TBP`` and a filter
+    #: or category that happens to contain a code is not the dataset.
+    COUNT_CODES = {
+        "TBD": "Dwellings",
+        "TBP": "Persons",
+        "TBP15": "Persons over 15",
+    }
+
     def set_count(self):
-        if "TBD" in self.file_name:
-            self.count = "Dwellings"
-            self.count_code = "TBD"
-        elif "TBP" in self.file_name:
-            self.count = "Persons"
-            self.count_code = "TBP"
-        elif "TBP15" in self.file_name:
-            self.count = "Persons over 15"
-            self.count_code = "TBP15"
+        tokens = self.file_name.removesuffix(".csv").split("_")
+        for token in tokens:
+            if token in self.COUNT_CODES:
+                self.count = self.COUNT_CODES[token]
+                self.count_code = token
+                return
 
     # TODO: Add a check for the count
     def check_count(self):

@@ -12,7 +12,14 @@ from typing import Sequence
 import pandas as pd
 
 ABS_ROOT = Path("G:/Shared drives/Data/ABS")
-RAW_DIR = ABS_ROOT / "2021 Census" / "raw"
+
+
+def raw_dir_for(census: int) -> Path:
+    """The folder a Census's TableBuilder extracts live in."""
+    return ABS_ROOT / f"{census} Census" / "raw"
+
+
+RAW_DIR = raw_dir_for(2021)
 GEOGRAPHY_DIR = ABS_ROOT / "Geography"
 
 #: Output lives beside processed/, never inside it, so that a project globbing
@@ -71,7 +78,8 @@ def normalise_geography_column(series: pd.Series, geography: str) -> pd.Series:
     return values
 
 
-#: The Census whose counts every extract under RAW_DIR comes from.
+#: The default Census for a pair, and the one whose extracts are in RAW_DIR.
+#: A pair on another Census reads from raw_dir_for(pair.census) instead.
 CENSUS_YEAR = 2021
 
 
@@ -128,6 +136,11 @@ class GeographyPair:
     def output_filename(self) -> str:
         return f"{self.key}_Weightings.csv"
 
+    @property
+    def raw_dir(self) -> Path:
+        """Where this pair's extracts live: its own Census's raw folder."""
+        return raw_dir_for(self.census)
+
 
 _POA_SHAPEFILE = SHAPEFILE_DIRS[2021] / "POA_2021_AUST_GDA2020.shp"
 
@@ -137,23 +150,27 @@ _POA_SHAPEFILE = SHAPEFILE_DIRS[2021] / "POA_2021_AUST_GDA2020.shp"
 CHUNK_STATES = ("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT", "OT")
 
 
-def _poa_sources(geog2_token: str, chunked: bool = False) -> dict[str, str | list[str]]:
+def _poa_sources(
+    geog2_token: str, chunked: bool = False, census: int = CENSUS_YEAR
+) -> dict[str, str | list[str]]:
     """The six universe globs for a POA-by-geog2 cross-tab.
 
     `chunked` appends the state wildcard used when a cross-tab exceeds
     TableBuilder's 40,000,000 cell limit and has to be pulled per state.
+    `census` is the year prefix on every extract filename.
     """
     token = f"{geog2_token}-*" if chunked else geog2_token
+    c = census
     sources: dict[str, str | list[str]] = {
-        "all_households": f"2021_TBD_POA_{token}_DWTD-Occupied.csv",
-        "all_persons": f"2021_TBP_POA_{token}.csv",
-        "rented_households": f"2021_TBD_POA_{token}_TEND-Rented.csv",
-        "renters_people": f"2021_TBP_POA_{token}_TEND-Rented.csv",
+        "all_households": f"{c}_TBD_POA_{token}_DWTD-Occupied.csv",
+        "all_persons": f"{c}_TBP_POA_{token}.csv",
+        "rented_households": f"{c}_TBD_POA_{token}_TEND-Rented.csv",
+        "renters_people": f"{c}_TBP_POA_{token}_TEND-Rented.csv",
         "private_rented_households": (
-            f"2021_TBD_POA_{token}_TENLLD-Rented Real estate agent.csv"
+            f"{c}_TBD_POA_{token}_TENLLD-Rented Real estate agent.csv"
         ),
         "private_renters_people": (
-            f"2021_TBP_POA_{token}_TENLLD-Rented Real estate agent.csv"
+            f"{c}_TBP_POA_{token}_TENLLD-Rented Real estate agent.csv"
         ),
     }
     if chunked:
@@ -168,7 +185,7 @@ def _poa_sources(geog2_token: str, chunked: bool = False) -> dict[str, str | lis
         # fractions still sum to 1. List the nine per-state files explicitly
         # instead - do not "simplify" this back to a glob.
         sources["all_persons"] = [
-            f"2021_TBP_POA_{geog2_token}-{state}.csv" for state in CHUNK_STATES
+            f"{c}_TBP_POA_{geog2_token}-{state}.csv" for state in CHUNK_STATES
         ]
     return sources
 
@@ -225,6 +242,34 @@ PAIRS: tuple[GeographyPair, ...] = (
         geog1_shapefile_name="POA_NAME21",
         geog2_shapefile=SHAPEFILE_DIRS[2021] / "SA3_2021_AUST_GDA2020.shp",
         geog2_shapefile_name="SA3_NAME21",
+    ),
+    # GCCSA is an ASGS main-structure region, released with POA and the SAs
+    # every five years, so its edition matches the Census it was pulled from.
+    GeographyPair(
+        geog1="POA",
+        geog1_edition=2021,
+        geog1_name="Postcode (2021)",
+        geog2="GCCSA",
+        geog2_edition=2021,
+        geog2_name="GCCSA (2021)",
+        sources=_poa_sources("GCCSA"),
+        geog1_shapefile=_POA_SHAPEFILE,
+        geog1_shapefile_name="POA_NAME21",
+        geog2_shapefile=SHAPEFILE_DIRS[2021] / "GCCSA_2021_AUST_GDA2020.shp",
+        # The ABS abbreviates GCCSA to GCC in its shapefile columns.
+        geog2_shapefile_name="GCC_NAME21",
+    ),
+    # 2016 Census counts on ASGS 2016 boundaries. No 2016 POA or GCCSA
+    # shapefiles are on G:, so this file carries no attribute columns.
+    GeographyPair(
+        geog1="POA",
+        geog1_edition=2016,
+        geog1_name="Postcode (2016)",
+        geog2="GCCSA",
+        geog2_edition=2016,
+        geog2_name="GCCSA (2016)",
+        sources=_poa_sources("GCCSA", census=2016),
+        census=2016,
     ),
     GeographyPair(
         geog1="POA",

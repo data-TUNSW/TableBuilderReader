@@ -12,6 +12,8 @@ def test_every_expected_pair_is_registered():
         "POA2021_SED2025_C2021",
         "POA2021_CED2025_C2021",
         "POA2021_SA32021_C2021",
+        "POA2021_GCCSA2021_C2021",
+        "POA2016_GCCSA2016_C2016",
         "POA2021_SAL2021_C2021",
         "SA12021_LGA2021_C2021",
     }
@@ -120,6 +122,47 @@ def test_poa_sal_all_persons_is_explicit_state_list():
     assert isinstance(source, list)
     assert len(source) == 9
     assert all("*" not in filename for filename in source)
+
+
+@pytest.mark.parametrize(
+    "key", ["POA2021_GCCSA2021_C2021", "POA2016_GCCSA2016_C2016"]
+)
+def test_poa_gccsa_lists_every_universe(key):
+    assert set(reg.PAIRS_BY_KEY[key].sources) == set(gw.UNIVERSES_BY_KEY)
+
+
+def test_each_pair_reads_its_own_census_raw_folder():
+    """A 2016 pair must not read the 2021 extracts, or vice versa."""
+    assert reg.PAIRS_BY_KEY["POA2021_GCCSA2021_C2021"].raw_dir == reg.RAW_DIR
+    assert (
+        reg.PAIRS_BY_KEY["POA2016_GCCSA2016_C2016"].raw_dir
+        == reg.ABS_ROOT / "2016 Census" / "raw"
+    )
+
+
+@pytest.mark.parametrize("census", [2016, 2021])
+def test_poa_gccsa_source_filenames_carry_their_census(census):
+    key = f"POA{census}_GCCSA{census}_C{census}"
+    sources = reg.PAIRS_BY_KEY[key].sources
+    assert sources["rented_households"] == f"{census}_TBD_POA_GCCSA_TEND-Rented.csv"
+    for pattern in sources.values():
+        assert pattern.startswith(f"{census}_TB")
+
+
+def test_every_pair_census_matches_its_source_prefix():
+    """Catches a pair registered with census=2016 but 2021 filenames."""
+    for pair in reg.PAIRS:
+        for pattern in pair.sources.values():
+            names = [pattern] if isinstance(pattern, str) else pattern
+            for name in names:
+                assert name.startswith(f"{pair.census}_"), (pair.key, name)
+
+
+def test_poa_gccsa_2021_joins_the_gccsa_shapefile_by_its_gcc_name():
+    """The ABS shapefile column is GCC_NAME21, not GCCSA_NAME21."""
+    pair = reg.PAIRS_BY_KEY["POA2021_GCCSA2021_C2021"]
+    assert pair.geog2_shapefile.name == "GCCSA_2021_AUST_GDA2020.shp"
+    assert pair.geog2_shapefile_name == "GCC_NAME21"
 
 
 def test_poa_sal_other_universes_remain_single_glob_strings():

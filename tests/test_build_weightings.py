@@ -190,6 +190,32 @@ def test_build_pair_is_silent_when_no_shapefile_is_configured(
     assert "shapefile" not in captured.out.lower()
 
 
+def test_build_pair_defaults_to_its_own_census_raw_folder(
+    fake_extracts, tmp_path, monkeypatch
+):
+    """With no raw_dir, a 2016 pair reads <ABS_ROOT>/2016 Census/raw."""
+    census_raw = tmp_path / "abs" / "2016 Census" / "raw"
+    census_raw.mkdir(parents=True)
+    for chunk in fake_extracts.glob("chunk-*.csv"):
+        (census_raw / chunk.name).write_bytes(chunk.read_bytes())
+    monkeypatch.setattr(reg, "ABS_ROOT", tmp_path / "abs")
+    pair = reg.GeographyPair(
+        geog1="POA",
+        geog1_edition=2016,
+        geog1_name="Postcode (2016)",
+        geog2="SAL",
+        geog2_edition=2016,
+        geog2_name="Suburb (2016)",
+        sources={"rented_households": "chunk-*.csv"},
+        census=2016,
+    )
+
+    df = bw.build_pair(pair, out_dir=tmp_path, write=False)
+
+    assert df is not None
+    assert df["Rented Households"].sum() == 80
+
+
 def test_readme_lists_each_built_file_and_its_universes():
     built = {
         "POA2021_SAL2021_C2021": pd.DataFrame(

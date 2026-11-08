@@ -47,8 +47,6 @@ _added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · stac
 
 _added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · acteid-extracts_
 
-## To do
-
 ### Add POA-to-GCCSA weightings
 
 - Register a POA x GCCSA pair in `weightings_registry.py` and generate the combined
@@ -58,7 +56,9 @@ _added 2026-11-07 · started 2026-11-07 · branch `reader-cluster-fixes` · acte
   Requested by the Bond Loss cluster demographics work, which needs a Greater Sydney
   comparator.
 
-_added 2026-11-06_
+_added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-gccsa-weightings_
+
+## To do
 
 ## Later / Someday
 

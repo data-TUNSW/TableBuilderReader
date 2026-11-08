@@ -30,6 +30,15 @@ _added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-
 
 ## To do
 
+### Tell apart ACTEID categories that share a label
+
+- In ACTEID extracts a category label can repeat under different parent groups (the
+  2021 state x visa table lists "Skilled Temporary Resident" twice), and the reader keeps
+  both rows with the same label. Carry the parent group as a column so they can be told
+  apart without relying on file position.
+
+_added 2026-11-09_
+
 ## Later / Someday
 
 ## Done (last 60 days)

@@ -17,15 +17,6 @@
 
 ## Working on
 
-### Update the realdata file-list test now that POA x SAL builds
-
-- `test_expected_weightings_files_exist` and `BUILT_PAIRS` in `tests/test_against_legacy.py`
-  still assume POA x SAL has no extracts, but its four household and persons universes are
-  pulled and the file is built, so the realdata suite fails. Include SAL and allow for its
-  missing renters-people universes (or pull those 18 extracts).
-
-_added 2026-11-09 · started 2026-11-09 · branch `sal-test-and-acteid-labels` · sal-file-list-test_
-
 ### Tell apart ACTEID categories that share a label
 
 - In ACTEID extracts a category label can repeat under different parent groups (the
@@ -40,6 +31,15 @@ _added 2026-11-09 · started 2026-11-09 · branch `sal-test-and-acteid-labels` �
 ## Later / Someday
 
 ## Done (last 60 days)
+
+### Update the realdata file-list test now that POA x SAL builds
+
+- `test_expected_weightings_files_exist` and `BUILT_PAIRS` in `tests/test_against_legacy.py`
+  still assume POA x SAL has no extracts, but its four household and persons universes are
+  pulled and the file is built, so the realdata suite fails. Include SAL and allow for its
+  missing renters-people universes (or pull those 18 extracts).
+
+_added 2026-11-09 · started 2026-11-09 · done 2026-11-09 · branch `sal-test-and-acteid-labels` · sal-file-list-test_
 
 ### Add POA-to-GCCSA weightings
 

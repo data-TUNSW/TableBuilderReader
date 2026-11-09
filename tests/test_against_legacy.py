@@ -9,9 +9,12 @@ LEGACY_DIR = reg.GEOGRAPHY_DIR / "processed"
 
 pytestmark = pytest.mark.realdata
 
-#: POA x SAL has no extracts pulled yet, so build_all() correctly skips it and
-#: writes no file for it. Every other registered pair is expected to build.
-BUILT_PAIRS = [pair for pair in reg.PAIRS if pair.geog2 != "SAL"]
+#: Every registered pair has at least one universe's extracts pulled, so every
+#: pair is expected to have a file. A pair may still lack some universes (POA x
+#: SAL has no renters-people extracts yet); the tests below check the universes
+#: each file carries, and test_file_carries_exactly_the_universes_with_extracts
+#: ties that set to the extracts actually present.
+BUILT_PAIRS = list(reg.PAIRS)
 
 POA_PAIRS = [pair for pair in BUILT_PAIRS if pair.geog1 == "POA"]
 
@@ -174,10 +177,8 @@ def test_leading_zero_postcodes_survive_the_round_trip(combined_poa_lga):
 def test_expected_weightings_files_exist():
     """weightings/ has exactly one file per built pair plus the README.
 
-    POA x SAL is deliberately excluded: its extracts are not pulled yet, so
-    build_all() skips it and writes no file for it. If this
-    ever changes to include a partial write, or a pair silently fails to
-    write while the others still pass, this is the test that would catch it.
+    If a pair silently fails to write while the others still pass, or a
+    stray file appears, this is the test that would catch it.
     """
     if not reg.WEIGHTINGS_DIR.exists():
         pytest.skip("run python -m abs_methods.build_weightings first")
@@ -185,6 +186,34 @@ def test_expected_weightings_files_exist():
     expected.add("README.md")
     actual = {path.name for path in reg.WEIGHTINGS_DIR.iterdir()}
     assert actual == expected
+
+
+@pytest.mark.parametrize("pair", BUILT_PAIRS, ids=[p.key for p in BUILT_PAIRS])
+def test_file_carries_exactly_the_universes_with_extracts(pair):
+    """A file has a universe block if and only if that universe's extracts exist.
+
+    Pairs with all six universes pulled must carry all six; a pair with some
+    extracts missing (POA x SAL renters people) carries only the rest. This
+    is what keeps the per-universe tests below, which only see the universes
+    present in each file, from passing on a file that dropped one.
+    """
+    path = _combined_path(pair)
+    _skip_if_missing(path)
+    header = set(_read_header(path))
+
+    with_extracts = {
+        universe.key
+        for universe in gw.UNIVERSES
+        if universe.key in pair.sources
+        and reg.resolve_sources(pair.sources[universe.key], pair.raw_dir)
+    }
+    in_file = {
+        universe.key
+        for universe in gw.UNIVERSES
+        if gw.universe_columns(universe, pair.geog1_name, pair.geog2_name)[0]
+        in header
+    }
+    assert in_file == with_extracts
 
 
 # ---------------------------------------------------------------------------

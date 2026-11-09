@@ -4,6 +4,7 @@ import geopandas as gpd
 from functools import reduce
 import os
 import numpy as np
+import warnings
 
 # pd.options.mode.chained_assignment = None  # default='warn'
 pd.options.mode.copy_on_write = True  # Removes SettingWithCopyWarning:
@@ -22,6 +23,111 @@ STATE_CHUNK_CODES = ("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT", "OT")
 #: real filter (``2021_TBP_TEND_STATE-NSW.csv`` is TEND for NSW only), never a
 #: chunk, so a state code after one of these is left as a filter.
 STATE_VARIABLES = ("STATE", "STE")
+
+#: Parent groups for ACTEID variables whose category labels repeat under
+#: different parents. TableBuilder writes the categories as a flat list with no
+#: indentation or parent rows, so the group can only come from the
+#: classification, given here in the order TableBuilder lists it. Keyed by the
+#: variable's full header label. Group names are the level-1 labels, so they
+#: match a level-1 extract such as ``2021_TBP_POA_VISAP_TENLLD-REA.csv``.
+ACTEID_PARENT_GROUPS = {
+    "VISAP Visa Subclass": [
+        ("Temporary Bridging", ["Aggregated bridging visas", "Bridging Visa"]),
+        (
+            "Temporary Student",
+            [
+                "AusAID/Defence Sponsored",
+                "ELICOS/Post Graduate",
+                "HES",
+                "Masters/Doctorate",
+                "Other Student",
+                "Schools",
+                "Student",
+                "VET",
+            ],
+        ),
+        ("Temporary Skilled", ["Skilled Temporary Resident"]),
+        ("Temporary Working Holiday Maker", ["Work and Holiday", "Working Holiday Maker"]),
+        (
+            "Temporary Other",
+            [
+                "Aggregated temp visas",
+                "International Relations",
+                "Other Sponsored Training",
+                "Recognised Graduate",
+                "Skilled Temporary Resident",
+                "Social/Cultural",
+                "Student Guardian",
+                "Temp. Other",
+                "Temp. Work",
+                "Training and Research",
+                "Transit Visa",
+            ],
+        ),
+        ("NZ Citizen (subclass 444)", ["NZ Citizen"]),
+    ],
+}
+
+
+def acteid_parent_groups(name, labels):
+    """Parent group of each data row for one ACTEID row variable, or None.
+
+    ``name`` is the variable's header label ("VISAP Visa Subclass"); ``labels``
+    holds, for each data row in file order, the row labels up to and including
+    this variable. Returns None when no label repeats within a block (the
+    usual case, so the output is unchanged). When labels repeat, each block's
+    labels are matched in order against ``ACTEID_PARENT_GROUPS``, so a repeated
+    label takes the group of its place in the classification. Labels outside
+    the classification (Total, Not applicable, Overseas visitor) are their own
+    group. Repeats in a variable with no registered classification are left
+    as they are, with a warning.
+    """
+    # One entry per category: an outer variable's label spans many data rows.
+    entries, previous = [], None
+    for row in labels:
+        key = tuple(row)
+        if key != previous:
+            entries.append(key)
+            previous = key
+    blocks = {}
+    for key in entries:
+        blocks.setdefault(key[:-1], []).append(key[-1])
+    if all(len(set(block)) == len(block) for block in blocks.values()):
+        return None
+    hierarchy = ACTEID_PARENT_GROUPS.get(name)
+    if hierarchy is None:
+        warnings.warn(
+            f"{name!r} repeats a category label within a block and has no parent"
+            + " groups in ACTEID_PARENT_GROUPS, so the repeated rows share a label"
+        )
+        return None
+    flat = [(group, label) for group, members in hierarchy for label in members]
+    known = {label for _, label in flat}
+    # Match each block's labels forward through the classification.
+    positions, groups_by_entry = {}, []
+    for key in entries:
+        parent, label = key[:-1], key[-1]
+        if label not in known:
+            groups_by_entry.append(label)
+            continue
+        start = positions.get(parent, 0)
+        i = next((j for j in range(start, len(flat)) if flat[j][1] == label), None)
+        if i is None:
+            raise ValueError(
+                f"{name!r}: {label!r} is out of the order in ACTEID_PARENT_GROUPS,"
+                + " so its parent group is ambiguous"
+            )
+        positions[parent] = i + 1
+        groups_by_entry.append(flat[i][0])
+    # Expand back to one group per data row.
+    out, previous, n = [], None, -1
+    for row in labels:
+        key = tuple(row)
+        if key != previous:
+            n += 1
+            previous = key
+        out.append(groups_by_entry[n])
+    return out
 
 
 def strip_chunk_suffix(token):
@@ -627,17 +733,30 @@ class TableBuilderReader:
                 return np.nan
             return float(row[j])
 
-        records, last = [], [""] * n_rows
+        records, last, row_labels = [], [""] * n_rows, []
         for row in rows[start:]:
             if not row or all(cell == "" for cell in row):
                 break
             last = [row[j] if row[j] != "" else last[j] for j in range(n_rows)]
+            row_labels.append(last)
             for j, name, rse in count_columns:
                 labels = last + ([name] if column_variable else [])
                 records.append((*labels, number(row, j), number(row, rse)))
-        return pd.DataFrame(
+        df = pd.DataFrame(
             records, columns=list(self.variables) + [self.count, "RSE"]
         )
+        row_names = [c for c in cur if c != ""]
+        for k, variable in enumerate(row_variables):
+            groups = acteid_parent_groups(
+                row_names[k], [labels[: k + 1] for labels in row_labels]
+            )
+            if groups is not None:
+                df.insert(
+                    df.columns.get_loc(variable),
+                    f"{variable} group",
+                    np.repeat(groups, len(count_columns)),
+                )
+        return df
 
     def detect_variables_row(self, limit_rows=100):
         truth_list = {

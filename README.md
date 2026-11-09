@@ -91,10 +91,18 @@ count of Person level") are recognised from their title lines and read by a sepa
 - The column variable is read from the header, so `column_variable` is optional. If given,
   it must match the file.
 - Total, Migratory and Overseas visitor rows and columns are dropped as for Census tables.
+- A category label can repeat under different parent groups. The 2021 level-2 visa table
+  (`VISAP Visa Subclass`) lists "Skilled Temporary Resident" under Temporary Skilled and
+  again under Temporary Other. The file gives no hierarchy, only a flat list, so the groups
+  come from `ACTEID_PARENT_GROUPS` in `table_builder_reader.py`, matched in file order.
+  A file with repeated labels gets a `<variable> group` column just before the variable
+  (`VISAP group`), holding the level-1 names used by the level-1 table ("Temporary
+  Skilled"). Files with no repeated labels, including the 2016 tables, are unchanged.
+  Repeats in a variable not listed there raise a warning and keep their shared label.
 
 ```python
 reader = TableBuilderReader("2021_TBP_STE_SEXP_VISAP_LFSP_TENLLD-REA.csv")
-reader.df.columns  # STE, SEXP, VISAP, LFSP, Persons, RSE
+reader.df.columns  # STE, SEXP, VISAP group, VISAP, LFSP, Persons, RSE
 ```
 
 ## Requirements

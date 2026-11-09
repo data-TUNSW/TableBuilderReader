@@ -17,6 +17,12 @@
 
 ## Working on
 
+## To do
+
+## Later / Someday
+
+## Done (last 60 days)
+
 ### Tell apart ACTEID categories that share a label
 
 - In ACTEID extracts a category label can repeat under different parent groups (the
@@ -24,13 +30,7 @@
   both rows with the same label. Carry the parent group as a column so they can be told
   apart without relying on file position.
 
-_added 2026-11-09 · started 2026-11-09 · branch `sal-test-and-acteid-labels` · acteid-parent-group_
-
-## To do
-
-## Later / Someday
-
-## Done (last 60 days)
+_added 2026-11-09 · started 2026-11-09 · done 2026-11-09 · branch `sal-test-and-acteid-labels` · acteid-parent-group_
 
 ### Update the realdata file-list test now that POA x SAL builds
 

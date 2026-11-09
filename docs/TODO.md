@@ -17,18 +17,16 @@
 
 ## Working on
 
-### Add POA-to-GCCSA weightings
-
-- Register a POA x GCCSA pair in `weightings_registry.py` and generate the combined
-  weightings file for it (Census 2021; 2016 too if the registry supports it), so
-  postcode data can be reallocated to Greater Sydney and the rest of each state. The
-  `*_POA_GCCSA_*` TableBuilder extracts for both Censuses are already in the raw folders.
-  Requested by the Bond Loss cluster demographics work, which needs a Greater Sydney
-  comparator.
-
-_added 2026-11-06 · started 2026-11-07 · branch `poa-gccsa-weightings` · poa-gccsa-weightings_
-
 ## To do
+
+### Update the realdata file-list test now that POA x SAL builds
+
+- `test_expected_weightings_files_exist` and `BUILT_PAIRS` in `tests/test_against_legacy.py`
+  still assume POA x SAL has no extracts, but its four household and persons universes are
+  pulled and the file is built, so the realdata suite fails. Include SAL and allow for its
+  missing renters-people universes (or pull those 18 extracts).
+
+_added 2026-11-09_
 
 ### Tell apart ACTEID categories that share a label
 
@@ -42,6 +40,14 @@ _added 2026-11-09_
 ## Later / Someday
 
 ## Done (last 60 days)
+
+### Add POA-to-GCCSA weightings
+
+- Register a POA x GCCSA pair in `weightings_registry.py` and generate the combined
+  weightings file for it (Census 2021 and 2016), so postcode data can be reallocated to
+  Greater Sydney and the rest of each state.
+
+_added 2026-11-06 · started 2026-11-07 · done 2026-11-09 · branch `poa-gccsa-weightings` · poa-gccsa-weightings_
 
 ### Read ACTEID extracts
 

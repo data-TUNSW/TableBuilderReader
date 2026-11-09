@@ -17,8 +17,6 @@
 
 ## Working on
 
-## To do
-
 ### Update the realdata file-list test now that POA x SAL builds
 
 - `test_expected_weightings_files_exist` and `BUILT_PAIRS` in `tests/test_against_legacy.py`
@@ -26,7 +24,7 @@
   pulled and the file is built, so the realdata suite fails. Include SAL and allow for its
   missing renters-people universes (or pull those 18 extracts).
 
-_added 2026-11-09_
+_added 2026-11-09 · started 2026-11-09 · branch `sal-test-and-acteid-labels` · sal-file-list-test_
 
 ### Tell apart ACTEID categories that share a label
 
@@ -35,7 +33,9 @@ _added 2026-11-09_
   both rows with the same label. Carry the parent group as a column so they can be told
   apart without relying on file position.
 
-_added 2026-11-09_
+_added 2026-11-09 · started 2026-11-09 · branch `sal-test-and-acteid-labels` · acteid-parent-group_
+
+## To do
 
 ## Later / Someday
 

@@ -14,6 +14,7 @@ def test_every_expected_pair_is_registered():
         "POA2021_SA32021_C2021",
         "POA2021_GCCSA2021_C2021",
         "POA2016_GCCSA2016_C2016",
+        "POA2011_LGA2011_C2011",
         "POA2021_SAL2021_C2021",
         "SA12021_LGA2021_C2021",
     }
@@ -172,3 +173,17 @@ def test_poa_sal_other_universes_remain_single_glob_strings():
             continue
         assert isinstance(pattern, str)
         assert "SAL-*" in pattern
+
+
+def test_poa_lga_2011_reads_the_2011_census_pre_merger_councils():
+    """LGA 2011 is the NSW council map before the May 2016 mergers."""
+    pair = reg.PAIRS_BY_KEY["POA2011_LGA2011_C2011"]
+    assert pair.output_filename == "POA2011_LGA2011_C2011_Weightings.csv"
+    assert pair.raw_dir == reg.ABS_ROOT / "2011 Census" / "raw"
+    assert pair.geog1_name == "Postcode (2011)"
+    assert pair.geog2_name == "Local Government Area (2011)"
+    assert set(pair.sources) == set(gw.UNIVERSES_BY_KEY)
+    assert pair.sources["all_households"] == (
+        "2011_TBD_POA_LGA(2011)_DWTD-Occupied.csv"
+    )
+    assert pair.sources["all_persons"] == "2011_TBP_POA_LGA(2011).csv"

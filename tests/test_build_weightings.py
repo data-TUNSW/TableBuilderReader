@@ -62,6 +62,24 @@ def test_read_universe_zero_pads_postcodes(fake_extracts):
     assert set(df["POA"]) == {"0800", "2000"}
 
 
+def test_read_universe_drops_rows_with_no_geography(fake_extracts):
+    """2011's "Unclassified (Aust.)" postal area reads as an NA POA.
+
+    It belongs to no postcode, so it must not reach either total.
+    """
+    pd.DataFrame(
+        {"POA": [None], "SAL": ["Sydney"], "Dwellings": [5]}
+    ).to_csv(fake_extracts / "chunk-c.csv", index=False)
+    df = bw.read_universe(
+        sorted(fake_extracts.glob("chunk-*.csv")),
+        count_type="Dwellings",
+        geog1="POA",
+        geog2="SAL",
+    )
+    assert df["POA"].notna().all()
+    assert df["Dwellings"].sum() == 80
+
+
 def test_build_pair_returns_none_when_no_extract_exists(tmp_path):
     pair = reg.PAIRS_BY_KEY["POA2021_SAL2021_C2021"]
     assert bw.build_pair(pair, raw_dir=tmp_path, out_dir=tmp_path, write=False) is None

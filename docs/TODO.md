@@ -17,6 +17,14 @@
 
 ## Working on
 
+### Add POA-to-LGA weightings on 2011 boundaries and Census counts
+
+- Register a POA 2011 x LGA 2011 pair on 2011 Census counts and generate
+  `POA2011_LGA2011_C2011_Weightings.csv`, so postcode data can be reallocated to the
+  NSW councils as they were before the May 2016 mergers.
+
+_added 2026-11-19 · started 2026-11-19 · branch `weightings-2011` · weightings-2011_
+
 ## To do
 
 ## Later / Someday

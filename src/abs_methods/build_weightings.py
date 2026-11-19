@@ -41,7 +41,13 @@ def read_universe(
         combined[column] = reg.normalise_geography_column(
             combined[column], column
         )
-    return combined
+
+    # A row whose geography the reader could not resolve is not in either
+    # geography, so it belongs in neither total. The 2011 extracts carry an
+    # "Unclassified (Aust.)" postal area with a few dozen people in it; the
+    # reader's four-digit POA extraction turns that label into NA, and an NA
+    # key would otherwise reach the totals and fail the QA checks.
+    return combined.dropna(subset=[geog1, geog2]).reset_index(drop=True)
 
 
 def build_pair(

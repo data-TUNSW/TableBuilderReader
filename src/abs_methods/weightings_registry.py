@@ -271,6 +271,22 @@ PAIRS: tuple[GeographyPair, ...] = (
         sources=_poa_sources("GCCSA", census=2016),
         census=2016,
     ),
+    # 2011 Census counts on ASGS 2011 boundaries: the NSW councils as they
+    # were before the May 2016 mergers (LGA 2015 differs only in minor
+    # adjustments). LGA 2016 onwards is post-merger. TableBuilder labels
+    # 2011 LGAs with their status suffix, e.g. "Gosford (C)", and adds the
+    # state where a name repeats, e.g. "Campbelltown (C) (NSW)". No 2011
+    # shapefiles are on G:, so this file carries no attribute columns.
+    GeographyPair(
+        geog1="POA",
+        geog1_edition=2011,
+        geog1_name="Postcode (2011)",
+        geog2="LGA",
+        geog2_edition=2011,
+        geog2_name="Local Government Area (2011)",
+        sources=_poa_sources("LGA(2011)", census=2011),
+        census=2011,
+    ),
     GeographyPair(
         geog1="POA",
         geog1_edition=2021,

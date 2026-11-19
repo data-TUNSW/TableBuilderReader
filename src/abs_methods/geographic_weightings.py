@@ -310,14 +310,19 @@ def _apply_fill_rules(
 
 
 def combine_universes(
-    frames: dict[str, pd.DataFrame], geog1_name: str, geog2_name: str
+    frames: dict[str, pd.DataFrame],
+    geog1_name: str,
+    geog2_name: str,
+    universes: tuple[Universe, ...] = UNIVERSES,
 ) -> pd.DataFrame:
     """Outer-join every available universe onto one geography-pair frame.
 
     `frames` maps a universe key to the frame `calculate_geog_weighting`
     produced for it. Universes absent from `frames` contribute no columns.
+    `universes` sets which keys are recognised and their column order; the
+    mesh block files pass their own (abs_methods.mesh_block_weightings).
     """
-    present = [u for u in UNIVERSES if u.key in frames]
+    present = [u for u in universes if u.key in frames]
     if not present:
         raise ValueError("combine_universes needs at least one universe")
 

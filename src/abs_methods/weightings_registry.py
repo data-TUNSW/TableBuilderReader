@@ -316,3 +316,97 @@ PAIRS: tuple[GeographyPair, ...] = (
 )
 
 PAIRS_BY_KEY: dict[str, GeographyPair] = {p.key: p for p in PAIRS}
+
+
+GEOGRAPHY_RAW_DIR = GEOGRAPHY_DIR / "raw"
+SHAPEFILE_DIRS_BY_EDITION = {
+    2011: GEOGRAPHY_DIR / "2011 shapefiles",
+    2026: GEOGRAPHY_DIR / "2026 shapefiles",
+}
+
+
+@dataclass(frozen=True)
+class MeshBlockPair:
+    """A geography pair built from mesh blocks rather than a Census cross-tab.
+
+    Used where no one Census was released on both geographies, so TableBuilder
+    cannot cross them. geog1 comes from an ABS mesh block allocation file,
+    geog2 from overlaying the mesh blocks on geog2's boundaries, and the
+    counts from Census mesh block counts carried onto the mesh blocks'
+    edition. The method is in abs_methods.mesh_block_weightings.
+
+    Named like a GeographyPair: `census` is the Census the counts come from,
+    which need not match either geography's edition.
+    """
+
+    geog1: str
+    geog1_edition: int
+    geog1_name: str
+    geog2: str
+    geog2_edition: int
+    geog2_name: str
+    census: int
+    #: The mesh blocks, on geog1's edition.
+    mb_boundaries: Path
+    #: ABS allocation of those mesh blocks to geog1, and its code column.
+    geog1_allocation: Path
+    geog1_allocation_column: str
+    #: geog2's boundaries and their name, code and state columns.
+    geog2_boundaries: Path
+    geog2_boundary_name: str
+    geog2_boundary_code: str
+    geog2_boundary_state: str
+    #: The state boundaries of geog2's edition, for Unincorporated areas.
+    state_boundaries: Path
+    state_boundary_code: str
+    #: Census mesh block counts, on the Census's own mesh block edition.
+    mb_counts: Path
+    #: That edition's mesh block allocation file (mesh block to SA1).
+    mb_count_allocation: Path
+    #: ABS correspondence from the counts' mesh blocks to geog1's.
+    mb_correspondence: Path
+    #: TableBuilder SA1 x LGA rented-households extract for the estimate.
+    sa1_rented_extract: Path
+
+    def __post_init__(self) -> None:
+        # The same rule as GeographyPair: a column names its edition.
+        GeographyPair.__post_init__(self)
+
+    key = GeographyPair.key
+    output_filename = GeographyPair.output_filename
+
+
+#: Pairs built from mesh blocks. build_all builds these after PAIRS.
+MESH_BLOCK_PAIRS: tuple[MeshBlockPair, ...] = (
+    # 2026 postal areas against the NSW councils as they were before the May
+    # 2016 mergers, weighted by 2021 Census mesh block counts. No Census
+    # crosses these two, so TableBuilder cannot produce it.
+    MeshBlockPair(
+        geog1="POA",
+        geog1_edition=2026,
+        geog1_name="Postcode (2026)",
+        geog2="LGA",
+        geog2_edition=2011,
+        geog2_name="Local Government Area (2011)",
+        census=2021,
+        mb_boundaries=(
+            SHAPEFILE_DIRS_BY_EDITION[2026] / "MB_2026_AUST_GDA2020.shp"
+        ),
+        geog1_allocation=GEOGRAPHY_RAW_DIR / "POA_2026_AUST.xlsx",
+        geog1_allocation_column="POA_CODE_2026",
+        geog2_boundaries=SHAPEFILE_DIRS_BY_EDITION[2011] / "LGA_2011_AUST.shp",
+        geog2_boundary_name="LGA_NAME11",
+        geog2_boundary_code="LGA_CODE11",
+        geog2_boundary_state="STE_CODE11",
+        state_boundaries=SHAPEFILE_DIRS_BY_EDITION[2011] / "STE_2011_AUST.shp",
+        state_boundary_code="STE_CODE11",
+        mb_counts=GEOGRAPHY_RAW_DIR / "Mesh Block Counts, 2021.xlsx",
+        mb_count_allocation=GEOGRAPHY_RAW_DIR / "MB_2021_AUST.xlsx",
+        mb_correspondence=GEOGRAPHY_RAW_DIR / "CG_MB_2021_MB_2026.csv",
+        sa1_rented_extract=RAW_DIR / "2021_TBD_SA1_LGA_TEND-Rented.csv",
+    ),
+)
+
+MESH_BLOCK_PAIRS_BY_KEY: dict[str, MeshBlockPair] = {
+    p.key: p for p in MESH_BLOCK_PAIRS
+}

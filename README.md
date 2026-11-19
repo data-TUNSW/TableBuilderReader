@@ -111,11 +111,14 @@ reader.df.columns  # STE, SEXP, VISAP group, VISAP, LFSP, Persons, RSE
 - pandas
 - numpy
 - geopandas
+- shapely 2.0+ (comes with geopandas; the mesh block weightings call its
+  vectorised functions directly)
+- openpyxl (reads the ABS allocation and mesh block count workbooks)
 - (optional) ABS shapefiles for POA/LGA
 
 Install dependencies:
 ```bash
-pip install pandas numpy geopandas
+pip install pandas numpy geopandas "shapely>=2.0" openpyxl
 ```
 
 ## Notes

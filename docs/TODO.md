@@ -25,6 +25,15 @@
 
 _added 2026-11-19 · started 2026-11-19 · branch `weightings-2011` · weightings-2011_
 
+### Add LGA 2011 to POA 2026 weightings built from mesh blocks
+
+- Build `POA2026_LGA2011_C2021_Weightings.csv` from 2026 mesh blocks (POA 2026 from the
+  ASGS Edition 4 allocation, LGA 2011 by overlay on the 2011 boundaries, counts from
+  the 2021 Census mesh block counts), so pre-merger NSW council areas can be carried
+  onto 2026 postcodes.
+
+_added 2026-11-19 · started 2026-11-19 · branch `weightings-lga2011-poa2026` · weightings-lga2011-poa2026_
+
 ## To do
 
 ## Later / Someday

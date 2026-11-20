@@ -183,6 +183,7 @@ def test_expected_weightings_files_exist():
     if not reg.WEIGHTINGS_DIR.exists():
         pytest.skip("run python -m abs_methods.build_weightings first")
     expected = {pair.output_filename for pair in BUILT_PAIRS}
+    expected |= {pair.output_filename for pair in reg.MESH_BLOCK_PAIRS}
     expected.add("README.md")
     actual = {path.name for path in reg.WEIGHTINGS_DIR.iterdir()}
     assert actual == expected

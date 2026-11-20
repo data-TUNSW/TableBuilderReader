@@ -31,30 +31,32 @@ def built():
 
 
 @pytest.fixture(scope="module")
-def nsw_2011_labels():
-    """The 153 NSW labels in TableBuilder order, Albury to Unincorporated."""
+def labels_2011():
+    """Every LGA label in the TableBuilder 2011 file."""
     df = _read(reg.WEIGHTINGS_DIR / TABLEBUILDER_2011.output_filename)
-    labels = list(dict.fromkeys(df["Local Government Area (2011)"]))
-    start = labels.index("Albury (C)")
-    end = labels.index("Unincorporated NSW")
-    return labels[start : end + 1]
+    return set(df["Local Government Area (2011)"])
 
 
 def test_file_passes_its_own_qa(built):
     gw.check_weightings(built, POA, LGA, mbw.MESH_BLOCK_UNIVERSES)
 
 
-def test_every_nsw_2011_council_is_present_under_its_tablebuilder_label(
-    built, nsw_2011_labels
+def test_all_153_nsw_labels_are_present_and_match_the_2011_file(
+    built, labels_2011
 ):
-    assert len(nsw_2011_labels) == 153
-    assert set(nsw_2011_labels) <= set(built[LGA])
+    """152 councils plus Unincorporated NSW, spelt as TableBuilder spells them.
+
+    The 2011 file has no code column, so NSW is told apart here by code.
+    """
+    nsw = set(built.loc[built["LGA_CODE11"].astype(str).str.startswith("1"), LGA])
+    assert len(nsw) == 153
+    assert "Unincorporated NSW" in nsw
+    assert "Campbelltown (C) (NSW)" in nsw
+    assert nsw <= labels_2011
 
 
-def test_every_nsw_label_carries_a_nsw_code(built, nsw_2011_labels):
-    nsw = built[built[LGA].isin(nsw_2011_labels)]
-    assert nsw["LGA_CODE11"].astype(str).str.startswith("1").all()
-    assert nsw.groupby(LGA)["LGA_CODE11"].nunique().eq(1).all()
+def test_every_label_has_one_code(built):
+    assert built.groupby(LGA)["LGA_CODE11"].nunique().eq(1).all()
 
 
 def test_pre_merger_councils_split_shared_postcodes(built):

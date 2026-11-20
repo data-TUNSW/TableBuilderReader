@@ -135,13 +135,16 @@ def km_box(x0, y0, x1, y1):
     return box(x0 * 1000, y0 * 1000, x1 * 1000, y1 * 1000)
 
 
+UNINCORPORATED = {"1": "19399", "9": "99399"}
+
+
 @pytest.fixture
 def layout():
     """Two councils in state 1, an uncovered strip, and the sea below y=0.
 
-    In kilometres. State 1 is [0, 30] x [0, 10]: council A is [0, 10], council B is
-    [10, 20], and [20, 30] belongs to no council (Unincorporated, 19399).
-    Below y = 0 is outside every state.
+    In kilometres. State 1 is [0, 30] x [0, 10]: council A is [0, 10],
+    council B is [10, 20], and [20, 30] belongs to no council
+    (Unincorporated, 19399). Below y = 0 is outside every state.
     """
     crs = "EPSG:9473"
     regions = gpd.GeoDataFrame(
@@ -153,14 +156,21 @@ def layout():
         {"STATE": ["1"]}, geometry=[km_box(0, 0, 30, 10)], crs=crs
     )
     mesh_blocks = gpd.GeoDataFrame(
-        {"MB_CODE": ["inside", "straddle", "uninc", "border", "coast", "sea"]},
+        {
+            "MB_CODE": [
+                "inside", "straddle", "uninc", "border", "coast", "sea",
+                "island",
+            ],
+            "STATE": ["1"] * 6 + ["9"],
+        },
         geometry=[
             km_box(1, 1, 3, 3),  # wholly in A
             km_box(3, 4, 13, 5),  # 7 in A, 3 in B
             km_box(22, 1, 25, 4),  # wholly unincorporated
             km_box(16, 1, 26, 2),  # 4 in B, 6 unincorporated
             km_box(4, -6, 6, 4),  # 8 in A, 12 at sea
-            km_box(4, -20, 6, -15),  # nowhere: nearest council
+            km_box(4, -4, 6, -2),  # 2 km offshore: nearest council
+            km_box(4, -900, 6, -890),  # far out, state with no councils
         ],
         crs=crs,
     )
@@ -171,7 +181,7 @@ def test_overlay_assigns_each_mesh_block_to_its_largest_overlap(layout):
     mesh_blocks, regions, states = layout
 
     result = mbw.assign_by_largest_overlap(
-        mesh_blocks, regions, states, {"1": "19399"}
+        mesh_blocks, regions, states, UNINCORPORATED
     ).set_index("MB_CODE")
 
     assert result["CODE"].to_dict() == {
@@ -183,6 +193,9 @@ def test_overlay_assigns_each_mesh_block_to_its_largest_overlap(layout):
         # council even when most of it lies outside the 2011 coastline.
         "coast": "A",
         "sea": "A",
+        # Further than 5 km from any council in its state (Norfolk Island):
+        # its state's Unincorporated region.
+        "island": "99399",
     }
     assert result.loc["inside", "SHARE"] == pytest.approx(1.0)
     assert result.loc["straddle", "SHARE"] == pytest.approx(0.7)
@@ -190,6 +203,7 @@ def test_overlay_assigns_each_mesh_block_to_its_largest_overlap(layout):
     assert result.loc["coast", "SHARE"] == pytest.approx(0.4)
     assert result.loc["straddle", "CANDIDATES"] == 2
     assert result.loc["sea", "FALLBACK"]
+    assert result.loc["island", "FALLBACK"]
     assert not result.loc["inside", "FALLBACK"]
 
 
@@ -199,7 +213,7 @@ def test_uncovered_parts_keep_real_gaps_and_drop_digitising_slivers(layout):
     # sliver along y = 10 km: below a hectare, so not Unincorporated land.
     states = states.set_geometry([box(0, 0, 30_000, 10_000.2)], crs=states.crs)
 
-    parts = mbw.uncovered_parts(regions, states, {"1": "19399"})
+    parts = mbw.uncovered_parts(regions, states, UNINCORPORATED)
 
     assert len(parts) == 1
     assert parts["CODE"].tolist() == ["19399"]
@@ -209,16 +223,18 @@ def test_uncovered_parts_keep_real_gaps_and_drop_digitising_slivers(layout):
 def test_overlay_drops_mesh_blocks_with_no_geometry(layout):
     mesh_blocks, regions, states = layout
     no_address = gpd.GeoDataFrame(
-        {"MB_CODE": ["10000009499"]}, geometry=[None], crs=mesh_blocks.crs
+        {"MB_CODE": ["10000009499"], "STATE": ["1"]},
+        geometry=[None],
+        crs=mesh_blocks.crs,
     )
     mesh_blocks = pd.concat([mesh_blocks, no_address], ignore_index=True)
 
     result = mbw.assign_by_largest_overlap(
-        mesh_blocks, regions, states, {"1": "19399"}
+        mesh_blocks, regions, states, UNINCORPORATED
     )
 
     assert "10000009499" not in set(result["MB_CODE"])
-    assert len(result) == 6
+    assert len(result) == 7
 
 
 # ------------------------------------------------------------ weighting

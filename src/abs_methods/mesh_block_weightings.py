@@ -205,7 +205,8 @@ def assign_by_largest_overlap(
 ) -> pd.DataFrame:
     """Give each mesh block the region holding most of its area.
 
-    `mesh_blocks` has MB_CODE; `regions` has CODE and STATE (one polygon per
+    `mesh_blocks` has MB_CODE and STATE; `regions` has CODE and STATE (one
+    polygon per
     region; regions with no polygon are left out by the caller); `states` has
     STATE. `unincorporated` maps a state to the region code that takes the
     part of the state no region covers. All three frames must share an
@@ -214,7 +215,7 @@ def assign_by_largest_overlap(
     Returns one row per mesh block with a geometry: MB_CODE, CODE, SHARE (the
     winner's share of the mesh block's area), CANDIDATES (how many regions,
     including Unincorporated ones, hold any of it) and FALLBACK (True where
-    no candidate held any area and the nearest region was used instead).
+    no candidate held any area and _nearest_in_state chose instead).
     """
     mesh_blocks = mesh_blocks[
         mesh_blocks.geometry.notna() & ~mesh_blocks.geometry.is_empty
@@ -255,12 +256,44 @@ def assign_by_largest_overlap(
         }
     )
     result["FALLBACK"] = result["CODE"].isna()
-    if result["FALLBACK"].any():
-        missing = np.flatnonzero(result["FALLBACK"].to_numpy())
-        _, nearest = regions.sindex.nearest(geoms[missing], return_all=False)
-        result.loc[missing, "CODE"] = regions["CODE"].to_numpy()[nearest]
+    missing = np.flatnonzero(result["FALLBACK"].to_numpy())
+    if len(missing):
+        result.loc[missing, "CODE"] = _nearest_in_state(
+            mesh_blocks.iloc[missing], regions, unincorporated
+        )
         result.loc[missing, "SHARE"] = 0.0
     return result
+
+
+#: How far outside every 2011 boundary a mesh block may lie and still go to
+#: the nearest council in its state; further out it is Unincorporated.
+NEAREST_LIMIT_METRES = 5_000.0
+
+
+def _nearest_in_state(
+    mesh_blocks: gpd.GeoDataFrame,
+    regions: gpd.GeoDataFrame,
+    unincorporated: dict[str, str],
+) -> list[str]:
+    """A region for each mesh block that no 2011 boundary touches.
+
+    Usually coastline or an island drawn differently in 2011: the nearest
+    region in the mesh block's own state within NEAREST_LIMIT_METRES.
+    Anything further out (Norfolk Island, which no 2011 state outline
+    includes) goes to its state's Unincorporated region.
+    """
+    codes = []
+    for state, geometry in zip(mesh_blocks["STATE"], mesh_blocks.geometry):
+        candidates = regions[regions["STATE"] == state]
+        code = unincorporated.get(state)
+        if len(candidates):
+            distances = candidates.geometry.distance(geometry)
+            if distances.min() <= NEAREST_LIMIT_METRES:
+                code = candidates["CODE"].iloc[int(np.argmin(distances))]
+        if code is None:
+            raise ValueError(f"no region for mesh block in state {state}")
+        codes.append(code)
+    return codes
 
 
 #: Parts of a state outside every council smaller than this (one hectare)
@@ -346,8 +379,8 @@ def mesh_block_table(pair: reg.MeshBlockPair) -> tuple[pd.DataFrame, dict]:
     )
 
     mesh_blocks = gpd.read_file(
-        pair.mb_boundaries, columns=["MB_CODE26"]
-    ).rename(columns={"MB_CODE26": "MB_CODE"})
+        pair.mb_boundaries, columns=["MB_CODE26", "STE_CODE26"]
+    ).rename(columns={"MB_CODE26": "MB_CODE", "STE_CODE26": "STATE"})
     regions = gpd.read_file(pair.geog2_boundaries)
     regions["LABEL"] = state_labels(
         regions, pair.geog2_boundary_name, pair.geog2_boundary_state

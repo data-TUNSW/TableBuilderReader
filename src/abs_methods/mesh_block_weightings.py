@@ -25,10 +25,10 @@ through the same `calculate_geog_weighting`, `combine_universes` and
 
 The ASGS 2011 LGA file has no polygon for the "Unincorporated" areas (all of
 the ACT, the NSW far west and Lord Howe Island, and so on): they are defined
-as whatever part of a state no council covers. The overlay therefore gives
-each mesh block a further candidate per 2011 state, its area inside that
-state's 2011 boundary less the area inside that state's councils, labelled
-with the state's Unincorporated LGA. Area outside every 2011 state (mostly
+as whatever part of a state no council covers. The overlay therefore adds,
+as further candidates, each 2011 state's outline less its councils (parts of
+a hectare or more), labelled with the state's Unincorporated LGA. Area
+outside every 2011 state (mostly
 coastline drawn differently in 2011) is no candidate at all, so a coastal mesh
 block is not pushed into an Unincorporated area by its sea frontage.
 """
@@ -222,31 +222,16 @@ def assign_by_largest_overlap(
     geoms = mesh_blocks.geometry.values
     mb_area = shapely.area(geoms)
 
-    region_areas = _overlap_areas(geoms, regions.geometry.values)
-    region_areas["CODE"] = regions["CODE"].to_numpy()[region_areas["right"]]
-    region_areas["STATE"] = regions["STATE"].to_numpy()[region_areas["right"]]
-
-    state_areas = _overlap_areas(geoms, states.geometry.values)
-    state_areas["STATE"] = states["STATE"].to_numpy()[state_areas["right"]]
-    covered = region_areas.groupby(["left", "STATE"])["area"].sum()
-    state_areas = state_areas.set_index(["left", "STATE"])
-    state_areas["area"] = (
-        state_areas["area"]
-        - covered.reindex(state_areas.index, fill_value=0.0)
-    ).clip(lower=0.0)
-    state_areas = state_areas.reset_index()
-    state_areas["CODE"] = state_areas["STATE"].map(unincorporated)
-    state_areas = state_areas.dropna(subset=["CODE"])
-
+    uncovered = uncovered_parts(regions, states, unincorporated)
+    targets = pd.concat(
+        [regions[["CODE", "geometry"]], uncovered], ignore_index=True
+    )
+    options = _overlap_areas(geoms, targets.geometry.values)
+    options["CODE"] = targets["CODE"].to_numpy()[options["right"]]
+    # An Unincorporated area is several polygons; sum a mesh block's parts.
+    options = options.groupby(["left", "CODE"], as_index=False)["area"].sum()
     # A sliver below a square metre is the two boundary sets disagreeing,
     # not a region holding part of the mesh block.
-    options = pd.concat(
-        [
-            region_areas[["left", "CODE", "area"]],
-            state_areas[["left", "CODE", "area"]],
-        ],
-        ignore_index=True,
-    )
     options = options[options["area"] >= 1.0]
 
     candidates = options.groupby("left").size()
@@ -276,6 +261,41 @@ def assign_by_largest_overlap(
         result.loc[missing, "CODE"] = regions["CODE"].to_numpy()[nearest]
         result.loc[missing, "SHARE"] = 0.0
     return result
+
+
+#: Parts of a state outside every council smaller than this (one hectare)
+#: are where the state and council boundaries were digitised slightly
+#: differently, not Unincorporated land. The real Unincorporated areas are
+#: square kilometres at least (Lord Howe Island, French Island, the ACT).
+MIN_UNCOVERED_AREA = 10_000.0
+
+
+def uncovered_parts(
+    regions: gpd.GeoDataFrame,
+    states: gpd.GeoDataFrame,
+    unincorporated: dict[str, str],
+) -> gpd.GeoDataFrame:
+    """The parts of each state that no region covers, one row per polygon.
+
+    Each part is labelled with its state's Unincorporated code. Computed
+    once per state, so the per-mesh-block overlay only meets these small
+    polygons and never a whole state outline, which is slow to intersect.
+    """
+    codes, parts = [], []
+    for state, geometry in zip(states["STATE"], states.geometry.values):
+        code = unincorporated.get(state)
+        if code is None or geometry is None:
+            continue
+        covered = shapely.union_all(
+            regions.loc[regions["STATE"] == state].geometry.values
+        )
+        pieces = shapely.get_parts(shapely.difference(geometry, covered))
+        pieces = pieces[shapely.area(pieces) >= MIN_UNCOVERED_AREA]
+        codes.extend([code] * len(pieces))
+        parts.extend(pieces)
+    return gpd.GeoDataFrame(
+        {"CODE": codes}, geometry=list(parts), crs=regions.crs
+    )
 
 
 def _overlap_areas(left, right) -> pd.DataFrame:

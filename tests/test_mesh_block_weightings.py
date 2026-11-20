@@ -130,32 +130,37 @@ def test_state_labels_add_the_state_only_where_a_name_repeats():
 # -------------------------------------------------------------- overlay
 
 
+def km_box(x0, y0, x1, y1):
+    """A box in kilometres, so areas clear the one-hectare uncovered floor."""
+    return box(x0 * 1000, y0 * 1000, x1 * 1000, y1 * 1000)
+
+
 @pytest.fixture
 def layout():
     """Two councils in state 1, an uncovered strip, and the sea below y=0.
 
-    State 1 is [0, 30] x [0, 10]: council A is [0, 10], council B is
+    In kilometres. State 1 is [0, 30] x [0, 10]: council A is [0, 10], council B is
     [10, 20], and [20, 30] belongs to no council (Unincorporated, 19399).
     Below y = 0 is outside every state.
     """
     crs = "EPSG:9473"
     regions = gpd.GeoDataFrame(
         {"CODE": ["A", "B"], "STATE": ["1", "1"]},
-        geometry=[box(0, 0, 10, 10), box(10, 0, 20, 10)],
+        geometry=[km_box(0, 0, 10, 10), km_box(10, 0, 20, 10)],
         crs=crs,
     )
     states = gpd.GeoDataFrame(
-        {"STATE": ["1"]}, geometry=[box(0, 0, 30, 10)], crs=crs
+        {"STATE": ["1"]}, geometry=[km_box(0, 0, 30, 10)], crs=crs
     )
     mesh_blocks = gpd.GeoDataFrame(
         {"MB_CODE": ["inside", "straddle", "uninc", "border", "coast", "sea"]},
         geometry=[
-            box(1, 1, 3, 3),  # wholly in A
-            box(3, 4, 13, 5),  # 7 in A, 3 in B
-            box(22, 1, 25, 4),  # wholly unincorporated
-            box(16, 1, 26, 2),  # 4 in B, 6 unincorporated
-            box(4, -6, 6, 4),  # 8 in A, 12 at sea
-            box(4, -20, 6, -15),  # nowhere: nearest council
+            km_box(1, 1, 3, 3),  # wholly in A
+            km_box(3, 4, 13, 5),  # 7 in A, 3 in B
+            km_box(22, 1, 25, 4),  # wholly unincorporated
+            km_box(16, 1, 26, 2),  # 4 in B, 6 unincorporated
+            km_box(4, -6, 6, 4),  # 8 in A, 12 at sea
+            km_box(4, -20, 6, -15),  # nowhere: nearest council
         ],
         crs=crs,
     )
@@ -186,6 +191,19 @@ def test_overlay_assigns_each_mesh_block_to_its_largest_overlap(layout):
     assert result.loc["straddle", "CANDIDATES"] == 2
     assert result.loc["sea", "FALLBACK"]
     assert not result.loc["inside", "FALLBACK"]
+
+
+def test_uncovered_parts_keep_real_gaps_and_drop_digitising_slivers(layout):
+    _, regions, states = layout
+    # A state edge drawn 20 cm beyond the councils' leaves a 4,000 m2
+    # sliver along y = 10 km: below a hectare, so not Unincorporated land.
+    states = states.set_geometry([box(0, 0, 30_000, 10_000.2)], crs=states.crs)
+
+    parts = mbw.uncovered_parts(regions, states, {"1": "19399"})
+
+    assert len(parts) == 1
+    assert parts["CODE"].tolist() == ["19399"]
+    assert parts.geometry.area.iloc[0] == pytest.approx(100e6, rel=1e-3)
 
 
 def test_overlay_drops_mesh_blocks_with_no_geometry(layout):
